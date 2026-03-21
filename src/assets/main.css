@@ -1,0 +1,43 @@
+/* 全局样式重置 - 确保整个应用可以正常滚动 */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  /* 确保可以正常滚动 */
+  scroll-behavior: smooth;
+}
+
+#app {
+  height: 100%;
+  width: 100%;
+  /* 确保应用容器可以滚动 */
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* 为所有元素设置盒模型 */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+/* 确保滚动条样式统一 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #b87359;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a0634a;
+}
