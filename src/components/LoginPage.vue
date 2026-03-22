@@ -331,10 +331,13 @@ const stats = [
   { num:'98.6%',   label:'好评率' },
 ]
 
+// 把 LoginPage.vue 里的 handleLogin 改成这个：
 const handleLogin = async () => {
   submitting.value = true
   await new Promise(r => setTimeout(r, 800))
   submitting.value = false
+  // ★ 登录成功，写入标记，主页读取后才播放 Splash
+  localStorage.setItem('justLoggedIn', 'true')
   router.push('/home')
 }
 const handleRegister = () => { console.log('注册', regForm) }
