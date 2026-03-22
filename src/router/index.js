@@ -41,7 +41,7 @@ const routes = [
     path: '/product',
     name: 'Product',
     component: ()=>import('@/views/Product.vue')
-  }
+  },{ path: '/message', component: () => import('@/views/MessagePage.vue') }
 ]
 
 const router = createRouter({

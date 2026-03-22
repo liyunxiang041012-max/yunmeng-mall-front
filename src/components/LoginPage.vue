@@ -25,7 +25,6 @@
           </h1>
           <p class="headline-sub">数百万件正品好物，AI 智能推荐<br/>专属优惠券等你来领</p>
         </div>
-
         <div class="priv-list">
           <div class="priv-item" v-for="p in privileges" :key="p.title">
             <div class="priv-icon">{{ p.icon }}</div>
@@ -52,15 +51,14 @@
     <div class="login-right">
       <div class="form-card">
 
-        <!-- Tab -->
-        <div class="tab-bar">
-          <button :class="['tab', { active: activeTab==='login' }]" @click="activeTab='login'">登录</button>
-          <button :class="['tab', { active: activeTab==='register' }]" @click="activeTab='register'">注册</button>
-          <div class="tab-line" :style="{ left: activeTab==='login' ? '4px' : 'calc(50% + 2px)', width: 'calc(50% - 6px)' }"></div>
+        <!-- 登录/注册切换 -->
+        <div class="lr-switch">
+          <button :class="['lrs-btn', { active: mode==='login' }]" @click="mode='login'">登录</button>
+          <button :class="['lrs-btn', { active: mode==='register' }]" @click="mode='register'">注册</button>
         </div>
 
-        <!-- ── 登录 ── -->
-        <div v-if="activeTab==='login'" class="panel">
+        <!-- ══ 登录 ══ -->
+        <div v-if="mode==='login'" class="panel">
           <div class="mode-tabs">
             <button :class="['mode-tab', { active: loginMode==='password' }]" @click="loginMode='password'">账号密码</button>
             <button :class="['mode-tab', { active: loginMode==='sms' }]" @click="loginMode='sms'">短信验证</button>
@@ -80,10 +78,10 @@
             </div>
             <div class="field">
               <label>密码</label>
-              <div class="input-wrap" :class="{ focused: focus.password, error: errors.password }">
+              <div class="input-wrap" :class="{ focused: focus.password }">
                 <svg class="fi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                 <input v-model="loginForm.password" :type="showPwd ? 'text' : 'password'" placeholder="请输入密码"
-                  @focus="focus.password=true; errors.password=''" @blur="focus.password=false" />
+                  @focus="focus.password=true" @blur="focus.password=false" />
                 <button type="button" class="eye-btn" @click="showPwd=!showPwd">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="15" height="15">
                     <template v-if="showPwd"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></template>
@@ -91,7 +89,6 @@
                   </svg>
                 </button>
               </div>
-              <p class="err-msg" v-if="errors.password">{{ errors.password }}</p>
             </div>
             <div class="form-row">
               <label class="check-label">
@@ -195,8 +192,8 @@
           </div>
         </div>
 
-        <!-- ── 注册 ── -->
-        <div v-if="activeTab==='register'" class="panel">
+        <!-- ══ 注册 ══ -->
+        <div v-if="mode==='register'" class="panel">
           <div class="new-perk-banner">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#A07830" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
             注册即送 <strong>50元</strong> 新人券 + <strong>30天</strong> 会员体验
@@ -224,10 +221,10 @@
             </div>
             <div class="field">
               <label>设置密码</label>
-              <div class="input-wrap" :class="{ focused: focus.regPwd, error: errors.regPwd }">
+              <div class="input-wrap" :class="{ focused: focus.regPwd }">
                 <svg class="fi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
                 <input v-model="regForm.password" :type="showRegPwd ? 'text' : 'password'" placeholder="8位以上，含字母和数字"
-                  @focus="focus.regPwd=true; errors.regPwd=''" @blur="focus.regPwd=false" />
+                  @focus="focus.regPwd=true" @blur="focus.regPwd=false" />
                 <button type="button" class="eye-btn" @click="showRegPwd=!showRegPwd">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="15" height="15">
                     <template v-if="showRegPwd"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></template>
@@ -257,9 +254,10 @@
               <span class="check-box"></span>
               <span>我已阅读并同意 <a href="#" class="link-gold">《用户协议》</a> 和 <a href="#" class="link-gold">《隐私政策》</a></span>
             </label>
-            <button type="submit" class="submit-btn" :disabled="!regForm.agree">
-              <span>立即注册</span>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            <button type="submit" class="submit-btn" :disabled="!regForm.agree || regSubmitting">
+              <span v-if="!regSubmitting">立即注册</span>
+              <span v-else class="loading-dots"><i></i><i></i><i></i></span>
+              <svg v-if="!regSubmitting" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
             </button>
           </form>
         </div>
@@ -280,32 +278,35 @@
 import { ref, reactive, computed, onUnmounted } from 'vue'
 import router from '@/router'
 
-const activeTab  = ref('login')
-const loginMode  = ref('password')
-const qrPlatform = ref('wechat')
-const showPwd    = ref(false)
-const showRegPwd = ref(false)
-const submitting = ref(false)
+const mode        = ref('login')   // 'login' | 'register'
+const loginMode   = ref('password')
+const qrPlatform  = ref('wechat')
+const showPwd     = ref(false)
+const showRegPwd  = ref(false)
+const submitting  = ref(false)
+const regSubmitting = ref(false)
 
 const focus = reactive({
   account:false, password:false, phone:false, smsCode:false,
   regPhone:false, regCode:false, regPwd:false, nickname:false
 })
-const errors = reactive({
-  account:'', password:'', regPhone:'', regPwd:''
-})
+const errors = reactive({ account:'', regPhone:'' })
 
 const loginForm = reactive({ account:'', password:'', remember:false })
 const smsForm   = reactive({ phone:'', code:'' })
 const regForm   = reactive({ phone:'', code:'', password:'', nickname:'', agree:false })
 
 const validateAccount  = () => { if (!loginForm.account) errors.account = '请输入手机号或邮箱' }
-const validateRegPhone = () => { if (!regForm.phone) errors.regPhone = '请输入手机号'; else if (!/^1\d{10}$/.test(regForm.phone)) errors.regPhone = '请输入正确的手机号' }
+const validateRegPhone = () => {
+  if (!regForm.phone) errors.regPhone = '请输入手机号'
+  else if (!/^1\d{10}$/.test(regForm.phone)) errors.regPhone = '请输入正确的手机号格式'
+  else errors.regPhone = ''
+}
 
 const smsCD = ref(0); let smsT = null
 const regCD = ref(0); let regT = null
-const sendSms    = () => { if(!smsForm.phone) return; smsCD.value=60; smsT=setInterval(()=>{smsCD.value--;if(smsCD.value<=0)clearInterval(smsT)},1000) }
-const sendRegSms = () => { if(!regForm.phone) return; regCD.value=60; regT=setInterval(()=>{regCD.value--;if(regCD.value<=0)clearInterval(regT)},1000) }
+const sendSms    = () => { if (!smsForm.phone) return; smsCD.value=60; smsT=setInterval(()=>{ smsCD.value--; if(smsCD.value<=0) clearInterval(smsT) },1000) }
+const sendRegSms = () => { if (!regForm.phone) return; regCD.value=60; regT=setInterval(()=>{ regCD.value--; if(regCD.value<=0) clearInterval(regT) },1000) }
 
 const pwdStr = computed(() => {
   const p = regForm.password; if (!p) return 0
@@ -317,8 +318,11 @@ const pwdStr = computed(() => {
 })
 
 const qrTimer = ref(120); const qrExpired = ref(false)
-let qrI = setInterval(() => { qrTimer.value--; if (qrTimer.value<=0) { qrExpired.value=true; clearInterval(qrI) } }, 1000)
-const refreshQr = () => { qrTimer.value=120; qrExpired.value=false; clearInterval(qrI); qrI=setInterval(()=>{qrTimer.value--;if(qrTimer.value<=0){qrExpired.value=true;clearInterval(qrI)}},1000) }
+let qrI = setInterval(() => { qrTimer.value--; if(qrTimer.value<=0){ qrExpired.value=true; clearInterval(qrI) } }, 1000)
+const refreshQr = () => {
+  qrTimer.value=120; qrExpired.value=false; clearInterval(qrI)
+  qrI = setInterval(()=>{ qrTimer.value--; if(qrTimer.value<=0){ qrExpired.value=true; clearInterval(qrI) } },1000)
+}
 
 const privileges = [
   { icon:'🛡️', title:'正品保障', desc:'官方授权，假一赔十' },
@@ -331,275 +335,144 @@ const stats = [
   { num:'98.6%',   label:'好评率' },
 ]
 
-// 把 LoginPage.vue 里的 handleLogin 改成这个：
+// ══ 写入登录状态（三个 key 缺一不可）══
+const saveLoginState = (name) => {
+  localStorage.setItem('isLogin',      'true')   // ← 登录态
+  localStorage.setItem('userName',     name)      // ← 用户名/头像
+  localStorage.setItem('justLoggedIn', 'true')   // ← 触发 Splash
+}
+
+// ══ 登录 ══
 const handleLogin = async () => {
+  validateAccount()
+  if (errors.account) return
   submitting.value = true
   await new Promise(r => setTimeout(r, 800))
   submitting.value = false
-  // ★ 登录成功，写入标记，主页读取后才播放 Splash
-  localStorage.setItem('justLoggedIn', 'true')
+  saveLoginState(loginForm.account)
   router.push('/home')
 }
-const handleRegister = () => { console.log('注册', regForm) }
+
+// ══ 注册 ══
+const handleRegister = async () => {
+  if (!regForm.agree) return
+  validateRegPhone()
+  if (errors.regPhone) return
+  regSubmitting.value = true
+  await new Promise(r => setTimeout(r, 800))
+  regSubmitting.value = false
+  const name = regForm.nickname || regForm.phone
+  saveLoginState(name)
+  router.push('/home')
+}
 
 onUnmounted(() => { clearInterval(smsT); clearInterval(regT); clearInterval(qrI) })
 </script>
 
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@200;300;400;500&family=Space+Mono:wght@400;700&display=swap');
-
 * { box-sizing: border-box; margin: 0; padding: 0; }
-
-.login-page {
-  position: fixed; inset: 0;
-  display: flex;
-  font-family: 'Noto Sans SC', 'PingFang SC', sans-serif;
-  -webkit-font-smoothing: antialiased;
-  background: #F5F2EC;
-}
+.login-page { position: fixed; inset: 0; display: flex; font-family: 'Noto Sans SC','PingFang SC',sans-serif; -webkit-font-smoothing: antialiased; background: #F5F2EC; }
 
 /* ══ 左侧 ══ */
-.login-left {
-  width: 48%; height: 100%;
-  padding: 48px 52px;
-  display: flex; flex-direction: column; justify-content: space-between;
-  background: linear-gradient(160deg, #FFF 0%, #FAF6EE 40%, #F5F0E6 100%);
-  border-right: 1px solid #E0D8C8;
-  overflow: hidden; position: relative;
-}
-.login-left::before {
-  content: '';
-  position: absolute; right: -120px; top: -120px;
-  width: 420px; height: 420px; border-radius: 50%;
-  background: radial-gradient(circle, rgba(201,168,76,0.10) 0%, transparent 65%);
-  pointer-events: none;
-}
-.login-left::after {
-  content: '';
-  position: absolute; left: -80px; bottom: -80px;
-  width: 320px; height: 320px; border-radius: 50%;
-  background: radial-gradient(circle, rgba(201,168,76,0.07) 0%, transparent 65%);
-  pointer-events: none;
-}
-
+.login-left { width: 48%; height: 100%; padding: 48px 52px; display: flex; flex-direction: column; justify-content: space-between; background: linear-gradient(160deg, #FFF 0%, #FAF6EE 40%, #F5F0E6 100%); border-right: 1px solid #E0D8C8; overflow: hidden; position: relative; }
+.login-left::before { content: ''; position: absolute; right: -120px; top: -120px; width: 420px; height: 420px; border-radius: 50%; background: radial-gradient(circle, rgba(201,168,76,0.10) 0%, transparent 65%); pointer-events: none; }
+.login-left::after  { content: ''; position: absolute; left: -80px; bottom: -80px; width: 320px; height: 320px; border-radius: 50%; background: radial-gradient(circle, rgba(201,168,76,0.07) 0%, transparent 65%); pointer-events: none; }
 .brand-logo { display: flex; align-items: center; gap: 11px; }
 .brand-text  { display: flex; flex-direction: column; }
 .brand-zh { font-size: 16px; font-weight: 500; color: #1A1A18; letter-spacing: 2px; }
-.brand-en { font-size: 9px;  font-weight: 300; letter-spacing: 4px; color: #8A8070; margin-top: 2px; }
-
+.brand-en { font-size: 9px; font-weight: 300; letter-spacing: 4px; color: #8A8070; margin-top: 2px; }
 .ll-mid { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 48px; }
-
 .headline { display: flex; flex-direction: column; margin-bottom: 16px; }
-.hl-1 { font-size: clamp(36px, 4vw, 54px); font-weight: 200; color: #1A1A18; letter-spacing: -1px; line-height: 1.1; }
-.hl-2 { font-size: clamp(36px, 4vw, 54px); font-weight: 200; color: #A07830; letter-spacing: -1px; line-height: 1.1; }
+.hl-1 { font-size: clamp(36px,4vw,54px); font-weight: 200; color: #1A1A18; letter-spacing: -1px; line-height: 1.1; }
+.hl-2 { font-size: clamp(36px,4vw,54px); font-weight: 200; color: #A07830; letter-spacing: -1px; line-height: 1.1; }
 .headline-sub { font-size: 14px; color: #8A8070; line-height: 1.8; font-weight: 300; }
-
 .priv-list { display: flex; flex-direction: column; gap: 20px; }
 .priv-item { display: flex; align-items: center; gap: 14px; }
-.priv-icon {
-  width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0;
-  background: #FFF; border: 1px solid #E0D8C8;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-}
+.priv-icon { width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0; background: #FFF; border: 1px solid #E0D8C8; display: flex; align-items: center; justify-content: center; font-size: 20px; }
 .priv-info strong { display: block; font-size: 13px; font-weight: 500; color: #1A1A18; margin-bottom: 2px; }
 .priv-info span   { font-size: 12px; color: #8A8070; font-weight: 300; }
-
-.stats-row {
-  display: flex; gap: 0;
-  padding-top: 24px; border-top: 1px solid #E0D8C8;
-  margin-bottom: 16px;
-}
-.stat-item {
-  flex: 1; display: flex; flex-direction: column; gap: 3px;
-  padding-left: 20px; border-right: 1px solid #E0D8C8;
-}
-.stat-item:first-child { padding-left: 0; }
-.stat-item:last-child  { border-right: none; }
-.stat-num   { font-size: 20px; font-weight: 500; color: #A07830; font-family: 'Space Mono', monospace; letter-spacing: -0.5px; }
+.stats-row { display: flex; padding-top: 24px; border-top: 1px solid #E0D8C8; margin-bottom: 16px; }
+.stat-item { flex: 1; display: flex; flex-direction: column; gap: 3px; padding-left: 20px; border-right: 1px solid #E0D8C8; }
+.stat-item:first-child { padding-left: 0; } .stat-item:last-child { border-right: none; }
+.stat-num   { font-size: 20px; font-weight: 500; color: #A07830; font-family: 'Space Mono',monospace; }
 .stat-label { font-size: 11px; color: #8A8070; font-weight: 300; }
-.copy { font-size: 11px; color: #B0A898; letter-spacing: 0.5px; }
+.copy { font-size: 11px; color: #B0A898; }
 
 /* ══ 右侧 ══ */
-.login-right {
-  width: 52%; height: 100%;
-  display: flex; align-items: center; justify-content: center;
-  padding: 40px; background: #F5F2EC;
-  overflow-y: auto;
-}
+.login-right { width: 52%; height: 100%; display: flex; align-items: center; justify-content: center; padding: 40px; background: #F5F2EC; overflow-y: auto; }
+.form-card { width: 100%; max-width: 420px; background: #FFF; border: 1px solid #E0D8C8; border-radius: 20px; padding: 36px; box-shadow: 0 4px 24px rgba(0,0,0,0.07); }
 
-.form-card {
-  width: 100%; max-width: 420px;
-  background: #FFF; border: 1px solid #E0D8C8;
-  border-radius: 20px; padding: 36px;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.07);
-}
-
-/* ── Tab ── */
-.tab-bar {
-  position: relative; display: flex;
-  background: #F5F2EC; border: 1px solid #E0D8C8;
-  border-radius: 11px; padding: 4px; margin-bottom: 24px;
-}
-.tab {
-  flex: 1; padding: 9px; border: none; background: none;
-  font-family: inherit; font-size: 14px; color: #8A8070;
-  font-weight: 300; cursor: pointer; border-radius: 8px;
-  position: relative; z-index: 1; transition: color .2s;
-}
-.tab.active { color: #1A1A18; font-weight: 500; }
-.tab-line {
-  position: absolute; top: 4px; bottom: 4px;
-  background: #FFF; border-radius: 8px;
-  border: 1px solid #E0D8C8;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.07);
-  transition: left .25s cubic-bezier(.4,0,.2,1);
-}
+/* ── 登录/注册切换 ── */
+.lr-switch { display: flex; gap: 6px; margin-bottom: 24px; background: #F5F2EC; border: 1px solid #E0D8C8; border-radius: 11px; padding: 4px; }
+.lrs-btn { flex: 1; padding: 10px; border: none; background: none; font-family: inherit; font-size: 15px; color: #8A8070; font-weight: 300; cursor: pointer; border-radius: 8px; transition: .2s; }
+.lrs-btn.active { color: #1A1A18; font-weight: 500; background: #FFF; border: 1px solid #E0D8C8; box-shadow: 0 2px 6px rgba(0,0,0,0.07); }
 
 /* ── 登录模式 ── */
 .mode-tabs { display: flex; gap: 6px; margin-bottom: 22px; }
-.mode-tab {
-  flex: 1; padding: 8px 4px; border: 1px solid #E0D8C8;
-  background: #FAFAF8; color: #8A8070; font-family: inherit;
-  font-size: 12px; font-weight: 300; border-radius: 8px;
-  cursor: pointer; transition: .2s; white-space: nowrap;
-}
+.mode-tab { flex: 1; padding: 8px 4px; border: 1px solid #E0D8C8; background: #FAFAF8; color: #8A8070; font-family: inherit; font-size: 12px; font-weight: 300; border-radius: 8px; cursor: pointer; transition: .2s; white-space: nowrap; }
 .mode-tab:hover { border-color: #C9A84C; color: #4A4438; }
 .mode-tab.active { background: #FFF; border-color: #C9A84C; color: #1A1A18; font-weight: 500; box-shadow: 0 2px 8px rgba(201,168,76,0.12); }
 
 /* ── 表单 ── */
-.panel { display: flex; flex-direction: column; gap: 0; }
+.panel { display: flex; flex-direction: column; }
 .form  { display: flex; flex-direction: column; gap: 16px; }
 .field { display: flex; flex-direction: column; gap: 7px; }
-.field label {
-  font-size: 13px; font-weight: 500; color: #4A4438;
-  display: flex; align-items: center; gap: 6px;
-}
-.optional {
-  font-size: 10px; color: #8A8070; font-weight: 300;
-  background: #F5F2EC; padding: 1px 6px; border-radius: 4px;
-  border: 1px solid #E0D8C8;
-}
-.input-wrap {
-  display: flex; align-items: center; gap: 10px;
-  background: #F5F2EC; border: 1.5px solid #E0D8C8;
-  border-radius: 10px; padding: 0 13px; transition: .2s;
-}
+.field label { font-size: 13px; font-weight: 500; color: #4A4438; display: flex; align-items: center; gap: 6px; }
+.optional { font-size: 10px; color: #8A8070; font-weight: 300; background: #F5F2EC; padding: 1px 6px; border-radius: 4px; border: 1px solid #E0D8C8; }
+.input-wrap { display: flex; align-items: center; gap: 10px; background: #F5F2EC; border: 1.5px solid #E0D8C8; border-radius: 10px; padding: 0 13px; transition: .2s; }
 .input-wrap.focused { border-color: #C9A84C; background: #FFFDF8; box-shadow: 0 0 0 3px rgba(201,168,76,0.1); }
 .input-wrap.error   { border-color: #C0392B; background: #FFF8F8; }
 .fi { width: 15px; height: 15px; color: #8A8070; flex-shrink: 0; }
-.input-wrap input {
-  flex: 1; background: none; border: none; outline: none;
-  color: #1A1A18; font-family: inherit; font-size: 14px; font-weight: 400;
-  padding: 12px 0;
-}
+.input-wrap input { flex: 1; background: none; border: none; outline: none; color: #1A1A18; font-family: inherit; font-size: 14px; padding: 12px 0; }
 .input-wrap input::placeholder { color: #B0A898; font-weight: 300; }
 .eye-btn { background: none; border: none; color: #8A8070; cursor: pointer; padding: 4px; display: flex; align-items: center; transition: .2s; }
 .eye-btn:hover { color: #4A4438; }
 .err-msg { font-size: 11px; color: #C0392B; padding-left: 2px; }
-
 .sms-wrap { padding-right: 6px; }
-.sms-btn {
-  flex-shrink: 0; padding: 7px 11px; border-radius: 7px;
-  background: #FFF; border: 1px solid #E0D8C8;
-  color: #4A4438; font-family: inherit; font-size: 12px; font-weight: 400;
-  cursor: pointer; white-space: nowrap; transition: .2s;
-}
+.sms-btn { flex-shrink: 0; padding: 7px 11px; border-radius: 7px; background: #FFF; border: 1px solid #E0D8C8; color: #4A4438; font-family: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; transition: .2s; }
 .sms-btn:hover:not(:disabled) { border-color: #C9A84C; color: #A07830; }
 .sms-btn:disabled { opacity: .45; cursor: default; }
-
 .form-row { display: flex; justify-content: space-between; align-items: center; }
-.check-label {
-  display: flex; align-items: flex-start; gap: 8px;
-  cursor: pointer; font-size: 13px; color: #4A4438; font-weight: 300;
-}
+.check-label { display: flex; align-items: flex-start; gap: 8px; cursor: pointer; font-size: 13px; color: #4A4438; font-weight: 300; }
 .check-label.agree { margin-top: 2px; }
 .check-real { display: none; }
-.check-box {
-  width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px;
-  border-radius: 4px; border: 1.5px solid #C9A84C;
-  background: transparent; transition: .2s; position: relative;
-}
+.check-box { width: 16px; height: 16px; flex-shrink: 0; margin-top: 1px; border-radius: 4px; border: 1.5px solid #C9A84C; background: transparent; transition: .2s; position: relative; }
 .check-real:checked + .check-box { background: #C9A84C; }
-.check-real:checked + .check-box::after {
-  content: '✓'; position: absolute; inset: 0;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 10px; color: #FFF; font-weight: 700;
-}
+.check-real:checked + .check-box::after { content: '✓'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #FFF; font-weight: 700; }
 .link-muted { font-size: 12px; color: #8A8070; text-decoration: none; transition: .2s; }
 .link-muted:hover { color: #1A1A18; }
 .link-gold { color: #A07830; text-decoration: underline; text-underline-offset: 2px; }
 
 /* ── 提交按钮 ── */
-.submit-btn {
-  display: flex; align-items: center; justify-content: center; gap: 10px;
-  width: 100%; padding: 13px;
-  background: linear-gradient(135deg, #A07830, #C9A84C);
-  border: none; border-radius: 11px;
-  color: #FFF; font-family: inherit; font-size: 14px; font-weight: 500;
-  letter-spacing: 0.5px; cursor: pointer; transition: .25s;
-  box-shadow: 0 4px 16px rgba(160,120,48,0.3);
-  margin-top: 4px;
-}
-.submit-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 22px rgba(160,120,48,0.45); background: linear-gradient(135deg, #B08840, #D9B85C); }
+.submit-btn { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; padding: 13px; background: linear-gradient(135deg,#A07830,#C9A84C); border: none; border-radius: 11px; color: #FFF; font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer; transition: .25s; box-shadow: 0 4px 16px rgba(160,120,48,0.3); margin-top: 4px; }
+.submit-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 6px 22px rgba(160,120,48,0.45); }
 .submit-btn:disabled { background: #E0D8C8; color: #B0A898; box-shadow: none; cursor: not-allowed; transform: none; }
-
 .loading-dots { display: flex; gap: 4px; align-items: center; }
 .loading-dots i { width: 6px; height: 6px; border-radius: 50%; background: #FFF; display: block; animation: dot-pulse 1.2s ease-in-out infinite; }
 .loading-dots i:nth-child(2) { animation-delay: .2s; }
 .loading-dots i:nth-child(3) { animation-delay: .4s; }
 @keyframes dot-pulse { 0%,80%,100%{opacity:.2;transform:scale(.8)} 40%{opacity:1;transform:scale(1)} }
 
-/* ── 分割线 ── */
-.divider {
-  display: flex; align-items: center; gap: 12px;
-  color: #B0A898; font-size: 12px; margin: 18px 0 14px;
-}
+/* ── 分割线/快捷登录 ── */
+.divider { display: flex; align-items: center; gap: 12px; color: #B0A898; font-size: 12px; margin: 18px 0 14px; }
 .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: #E0D8C8; }
-
-/* ── 快捷登录 ── */
 .quick-btns { display: flex; gap: 10px; }
-.quick-btn {
-  flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px;
-  padding: 11px; border-radius: 9px;
-  background: #FAFAF8; border: 1px solid #E0D8C8;
-  font-family: inherit; font-size: 13px; font-weight: 300; color: #4A4438;
-  cursor: pointer; transition: .2s;
-}
-.quick-btn:hover { border-color: #C9A84C; background: #FFFDF8; color: #1A1A18; }
+.quick-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 11px; border-radius: 9px; background: #FAFAF8; border: 1px solid #E0D8C8; font-family: inherit; font-size: 13px; font-weight: 300; color: #4A4438; cursor: pointer; transition: .2s; }
+.quick-btn:hover { border-color: #C9A84C; background: #FFFDF8; }
 
 /* ── 扫码 ── */
 .qr-panel { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 8px 0; }
 .qr-platform-tabs { display: flex; gap: 8px; width: 100%; }
-.qp-tab {
-  flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px;
-  padding: 9px; border-radius: 9px;
-  background: #F5F2EC; border: 1px solid #E0D8C8;
-  font-family: inherit; font-size: 12px; font-weight: 300; color: #8A8070;
-  cursor: pointer; transition: .2s;
-}
-.qp-tab.active { background: #FFF; border-color: #C9A84C; color: #4A4438; font-weight: 500; box-shadow: 0 2px 8px rgba(201,168,76,0.1); }
-.qr-box {
-  position: relative; width: 190px; height: 190px;
-  border-radius: 14px; overflow: hidden;
-  border: 1px solid #E0D8C8;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
-  transition: filter .3s;
-}
+.qp-tab { flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px; padding: 9px; border-radius: 9px; background: #F5F2EC; border: 1px solid #E0D8C8; font-family: inherit; font-size: 12px; font-weight: 300; color: #8A8070; cursor: pointer; transition: .2s; }
+.qp-tab.active { background: #FFF; border-color: #C9A84C; color: #4A4438; font-weight: 500; }
+.qr-box { position: relative; width: 190px; height: 190px; border-radius: 14px; overflow: hidden; border: 1px solid #E0D8C8; transition: filter .3s; }
 .qr-box.expired { filter: blur(4px); }
 .qr-svg { width: 100%; height: 100%; display: block; }
-.qr-expired-mask {
-  position: absolute; inset: 0;
-  background: rgba(250,246,238,0.93);
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px;
-}
-.qr-expired-mask p { font-size: 13px; color: #4A4438; font-weight: 400; }
-.qr-expired-mask button {
-  padding: 7px 18px; border-radius: 100px;
-  background: linear-gradient(135deg, #A07830, #C9A84C);
-  border: none; color: #FFF; font-family: inherit; font-size: 12px; cursor: pointer;
-}
-.qr-hint  { font-size: 13px; color: #4A4438; font-weight: 400; }
+.qr-expired-mask { position: absolute; inset: 0; background: rgba(250,246,238,0.93); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; }
+.qr-expired-mask p { font-size: 13px; color: #4A4438; }
+.qr-expired-mask button { padding: 7px 18px; border-radius: 100px; background: linear-gradient(135deg,#A07830,#C9A84C); border: none; color: #FFF; font-family: inherit; font-size: 12px; cursor: pointer; }
+.qr-hint { font-size: 13px; color: #4A4438; }
 .qr-timer { font-size: 12px; color: #8A8070; }
 .qr-timer em { font-style: normal; color: #A07830; font-weight: 600; }
 
@@ -612,38 +485,16 @@ onUnmounted(() => { clearInterval(smsT); clearInterval(regT); clearInterval(qrI)
 .str-label { font-size: 11px; color: #8A8070; }
 
 /* ── 注册福利 ── */
-.new-perk-banner {
-  display: flex; align-items: center; gap: 8px;
-  background: #FFFDF5; border: 1px solid rgba(201,168,76,0.3);
-  border-left: 3px solid #C9A84C;
-  border-radius: 10px; padding: 10px 14px;
-  font-size: 12px; color: #4A4438; font-weight: 300;
-  margin-bottom: 20px;
-}
+.new-perk-banner { display: flex; align-items: center; gap: 8px; background: #FFFDF5; border: 1px solid rgba(201,168,76,0.3); border-left: 3px solid #C9A84C; border-radius: 10px; padding: 10px 14px; font-size: 12px; color: #4A4438; font-weight: 300; margin-bottom: 20px; }
 .new-perk-banner strong { color: #A07830; font-weight: 600; }
 
 /* ── 底部 ── */
-.card-footer {
-  display: flex; justify-content: center; align-items: center; gap: 10px;
-  margin-top: 22px; padding-top: 18px; border-top: 1px solid #F0EAE0;
-  font-size: 11px; color: #B0A898;
-}
+.card-footer { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 22px; padding-top: 18px; border-top: 1px solid #F0EAE0; font-size: 11px; color: #B0A898; }
 .footer-link { color: #B0A898; text-decoration: none; font-size: 11px; transition: .2s; }
 .footer-link:hover { color: #4A4438; }
 .dot { color: #D8D0C4; }
 
 /* ── 响应式 ── */
-@media (max-width:960px) {
-  .login-left { width: 44%; padding: 36px 32px; }
-  .login-right { width: 56%; }
-  .stats-row { display: none; }
-}
-@media (max-width:720px) {
-  .login-page { flex-direction: column; overflow-y: auto; }
-  .login-left { width: 100%; height: auto; padding: 28px 24px; }
-  .ll-mid { gap: 28px; }
-  .priv-list, .ll-bot { display: none; }
-  .login-right { width: 100%; height: auto; padding: 20px; }
-  .form-card { border-radius: 16px; padding: 24px 20px; }
-}
+@media (max-width:960px) { .login-left { width: 44%; padding: 36px 32px; } .login-right { width: 56%; } .stats-row { display: none; } }
+@media (max-width:720px) { .login-page { flex-direction: column; overflow-y: auto; } .login-left { width: 100%; height: auto; padding: 28px 24px; } .ll-mid { gap: 28px; } .priv-list, .ll-bot { display: none; } .login-right { width: 100%; height: auto; padding: 20px; } .form-card { border-radius: 16px; padding: 24px 20px; } }
 </style>
