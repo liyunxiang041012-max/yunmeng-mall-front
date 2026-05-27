@@ -1,4 +1,5 @@
 <template>
+  <title>首页</title>
   <div class="app-root">
 
     <!-- ══ SPLASH（只有登录后才显示）══ -->
@@ -99,7 +100,7 @@
           <div class="hero-inner">
             <transition name="hero-fade" mode="out-in">
               <div :key="currentBanner" class="hero-slide">
-                <img :src="banners[currentBanner].image" :alt="banners[currentBanner].title" class="hero-img" />
+                <img :src="banners[currentBanner].image" :alt="banners[currentBanner].title" class="hero-img" @error="handleImageError" />
                 <div class="hero-overlay"></div>
                 <div class="hero-copy">
                   <span class="hero-tag">{{ banners[currentBanner].tag }}</span>
@@ -136,25 +137,8 @@
           </div>
         </section>
 
-        <!-- ══ 功能导航 ══ -->
-        <section class="fn-zone">
-          <div v-for="item in functionItems" :key="item.id" class="fn-tile">
-            <div class="fn-icon">{{ item.icon }}</div>
-            <span>{{ item.name }}</span>
-          </div>
-        </section>
 
-        <!-- ══ 会员横幅 ══ -->
-        <section class="member-banner">
-          <div class="mb-left">
-            <span class="mb-tag">会员专享</span>
-            <h2>加入云梦会员，尊享首单 15% 礼遇。</h2>
-            <button class="mb-btn">立即加入</button>
-          </div>
-          <div class="mb-right">
-            <img src="https://picsum.photos/400/240?random=88" alt="member" />
-          </div>
-        </section>
+
 
         <!-- ══ 优惠券 ══ -->
         <section class="section-block">
@@ -205,7 +189,7 @@
           <div class="flash-grid">
             <div v-for="item in seckillGoods" :key="item.id" class="flash-card">
               <div class="flash-img-wrap">
-                <img :src="item.image" :alt="item.name" />
+                <img :src="item.image" :alt="item.name" @error="handleImageError" />
                 <span class="flash-badge">-{{ Math.round((1 - item.currentPrice / item.originalPrice)*100) }}%</span>
               </div>
               <div class="flash-body">
@@ -242,7 +226,7 @@
             </div>
             <div class="boutique-subs">
               <div class="boutique-sub" v-for="f in featureSubs" :key="f.id">
-                <img :src="f.image" alt="" />
+                <img :src="f.image" alt="" @error="handleImageError" />
                 <div class="bs-mask">
                   <span>{{ f.tag }}</span>
                   <h4>{{ f.title }}</h4>
@@ -264,7 +248,7 @@
           <div class="rec-grid">
             <div v-for="item in recommendGoods" :key="item.id" class="rec-card">
               <div class="rec-img-wrap">
-                <img :src="item.image" :alt="item.name" />
+                <img :src="item.image" :alt="item.name" @error="handleImageError" />
                 <button class="rec-wish">♡</button>
                 <div class="rec-hover">
                   <button class="rec-add">加入购物车</button>
@@ -290,30 +274,39 @@
         <div class="orb-core">✦</div>
         <span class="orb-label">AI助手</span>
       </div>
-
       <transition name="panel-up">
-        <div v-if="aiPanelOpen" class="ai-panel">
-          <div class="ai-head">
-            <div class="ai-title"><span class="ai-dot"></span>云梦 AI 助手</div>
-            <button @click.stop="aiPanelOpen=false">✕</button>
-          </div>
-          <div class="ai-body">
-            <div class="ai-row">
-              <div class="ai-av">✦</div>
-              <div class="ai-bubble">你好！我是云梦 AI，可以帮你选品、比价、搭配穿搭，告诉我你的需求吧 ～</div>
-            </div>
-            <div class="ai-chips">
-              <button v-for="q in aiQuickQuestions" :key="q" class="ai-chip">{{ q }}</button>
-            </div>
-          </div>
-          <div class="ai-input">
-            <input type="text" placeholder="输入你想要的…" />
-            <button class="ai-send">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9l20-7z"/></svg>
-            </button>
-          </div>
+  <div v-if="aiPanelOpen" class="ai-panel">
+    <div class="ai-head">
+      <div class="ai-title"><span class="ai-dot"></span>云梦 AI 助手</div>
+      <button @click.stop="aiPanelOpen=false">✕</button>
+    </div>
+    <div class="ai-body" ref="aiBodyRef">
+      <template v-for="(msg, i) in aiMessages" :key="i">
+        <div v-if="msg.role === 'ai'" class="ai-row">
+          <div class="ai-av">✦</div>
+          <div class="ai-bubble">{{ msg.text }}</div>
         </div>
-      </transition>
+        <div v-else class="ai-row ai-row-user">
+          <div class="ai-bubble ai-bubble-user">{{ msg.text }}</div>
+        </div>
+      </template>
+      <div class="ai-chips" v-if="aiMessages.length === 1">
+        <button v-for="q in aiQuickQuestions" :key="q" class="ai-chip" @click="sendQuickQuestion(q)">{{ q }}</button>
+      </div>
+    </div>
+    <div class="ai-input">
+      <input
+        v-model="aiInput"
+        type="text"
+        placeholder="输入你想要的…"
+        @keyup.enter="sendAiMessage"
+      />
+      <button class="ai-send" @click="sendAiMessage">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9l20-7z"/></svg>
+      </button>
+    </div>
+  </div>
+</transition>
 
       <footer class="site-footer">
         <div class="footer-inner">
@@ -338,16 +331,41 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted ,nextTick } from 'vue'
 import router from '@/router'
+import { userLogout } from '@/api/user'
+import nofoundImage from '@/assets/images/nofound.png'
 
+// 图片加载失败处理
+const handleImageError = (e) => {
+  e.target.src = nofoundImage
+}
 // ══ Splash 控制 ══
 const justLoggedIn   = localStorage.getItem('justLoggedIn') === 'true'
 const showSplash     = ref(justLoggedIn)
 const splashPhase    = ref(0)
 const splashProgress = ref(0)
 let splashTimer = null
+// AI 对话
+const aiInput     = ref('')
+const aiMessages  = ref([
+  { role: 'ai', text: '你好！我是云梦 AI，可以帮你选品、比价、搭配穿搭，告诉我你的需求吧 ～' }
+])
+const aiBodyRef = ref(null)
 
+const sendAiMessage = async () => {
+  const text = aiInput.value.trim()
+  if (!text) return
+  aiMessages.value.push({ role: 'user', text })
+  aiInput.value = ''
+  await nextTick()
+  if (aiBodyRef.value) aiBodyRef.value.scrollTop = aiBodyRef.value.scrollHeight
+}
+
+const sendQuickQuestion = (q) => {
+  aiInput.value = q
+  sendAiMessage()
+}
 const runSplash = () => {
   splashPhase.value = 1
   setTimeout(() => { splashPhase.value = 2 }, 400)
@@ -383,12 +401,18 @@ const avatarChar = computed(() => {
 })
 
 // 退出登录
-const logout = () => {
+const logout = async () => {
   localStorage.removeItem('isLogin')
   localStorage.removeItem('userName')
   localStorage.removeItem('justLoggedIn')
+  await userLogout() // 调用后端接口
   isLogin.value = false
   router.push('/login')
+  ElementPlus.Message({
+    message: '已退出登录',
+    type: 'success',
+    duration: 1000
+  })
 }
 
 // ── 路由跳转 ──
@@ -422,16 +446,11 @@ const sideCards = ref([
 const services = ref([
   { id:1, icon:'◎', name:'正品溯源', desc:'每件商品数字化认证' },
   { id:2, icon:'◈', name:'尊享配送', desc:'全程管家式物流' },
-  { id:3, icon:'♛', name:'云梦会所', desc:'线下沙龙私人体验' },
-  { id:4, icon:'∞', name:'私人顾问', desc:'400小时在线服务' },
+  { id:3, icon:'♛', name:'顶级品质', desc:'商品5a级体验' },
+  { id:4, icon:'ai', name:'智能助手', desc:'24小时在线服务' },
 ])
 
-const functionItems = ref([
-  { id:1, icon:'⚡', name:'秒杀' }, { id:2, icon:'🎁', name:'领券' },
-  { id:3, icon:'♛', name:'会员' }, { id:4, icon:'📱', name:'数码' },
-  { id:5, icon:'✿', name:'美妆' }, { id:6, icon:'🍃', name:'生鲜' },
-  { id:7, icon:'◈', name:'家居' }, { id:8, icon:'∞', name:'更多' },
-])
+
 
 const coupons = ref([
   { id:1, amount:50,  minOrder:299, name:'全品类通用券', expire:'有效期至 2026-03-31', color:'#A07830', claimed:false },
@@ -495,6 +514,7 @@ onMounted(() => {
   window.addEventListener('storage', (e) => {
     if (e.key === 'isLogin') isLogin.value = e.newValue === 'true'
     if (e.key === 'userName') userName.value = e.newValue || ''
+   
   })
 })
 onUnmounted(() => {
@@ -742,26 +762,30 @@ onUnmounted(() => {
 .orb-label { margin-top: 6px; font-size: 10px; color: #8A8070; letter-spacing: 1px; }
 
 /* ══ AI 面板 ══ */
-.ai-panel { position: fixed; bottom: 115px; right: 40px; width: 330px; z-index: 9999; background: #FFF; border: 1px solid #E0D8C8; border-radius: 20px; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.15); }
-.ai-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid #F0EAE0; font-size: 13px; font-weight: 500; color: #1A1A18; background: #FAFAF8; }
-.ai-title { display: flex; align-items: center; gap: 8px; }
-.ai-dot { width: 7px; height: 7px; border-radius: 50%; background: #27AE60; animation: blink 2s infinite; }
+.ai-panel { position: fixed; bottom: 110px; right: 40px; width: 520px; z-index: 9999; background: #FFF; border: 1px solid #E0D8C8; border-radius: 24px; overflow: hidden; box-shadow: 0 24px 72px rgba(0,0,0,0.18); display: flex; flex-direction: column; }
+.ai-head { display: flex; justify-content: space-between; align-items: center; padding: 18px 22px; border-bottom: 1px solid #F0EAE0; font-size: 14px; font-weight: 500; color: #1A1A18; background: #FAFAF8; flex-shrink: 0; }
+.ai-title { display: flex; align-items: center; gap: 9px; }
+.ai-dot { width: 8px; height: 8px; border-radius: 50%; background: #27AE60; animation: blink 2s infinite; }
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
-.ai-head button { background: none; border: none; color: #8A8070; cursor: pointer; font-size: 14px; transition: 0.2s; }
-.ai-head button:hover { color: #A07830; }
-.ai-body { padding: 16px 18px 12px; }
-.ai-row { display: flex; gap: 10px; margin-bottom: 12px; }
-.ai-av { width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0; background: linear-gradient(135deg, #A07830, #C9A84C); color: #FFF; font-size: 12px; display: flex; align-items: center; justify-content: center; }
-.ai-bubble { background: #F5F2EC; border: 1px solid #E0D8C8; border-radius: 10px 10px 10px 3px; padding: 10px 12px; font-size: 12px; line-height: 1.6; color: #4A4438; font-weight: 300; }
-.ai-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.ai-chip { background: #F5F2EC; border: 1px solid #E0D8C8; color: #4A4438; font-family: inherit; font-size: 11px; padding: 5px 11px; border-radius: 100px; cursor: pointer; transition: 0.2s; }
+.ai-head button { background: none; border: none; color: #8A8070; cursor: pointer; font-size: 16px; transition: 0.2s; line-height: 1; padding: 4px 6px; border-radius: 6px; }
+.ai-head button:hover { color: #A07830; background: rgba(160,120,48,0.08); }
+.ai-body { padding: 20px 22px 16px; height: 600px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; scroll-behavior: smooth; }
+.ai-body::-webkit-scrollbar { width: 3px; }
+.ai-body::-webkit-scrollbar-thumb { background: #E0D8C8; border-radius: 10px; }
+.ai-row { display: flex; gap: 12px; align-items: flex-start; }
+.ai-row-user { flex-direction: row-reverse; }
+.ai-av { width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; background: linear-gradient(135deg, #A07830, #C9A84C); color: #FFF; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+.ai-bubble { background: #F5F2EC; border: 1px solid #E0D8C8; border-radius: 12px 12px 12px 3px; padding: 12px 15px; font-size: 13px; line-height: 1.7; color: #4A4438; font-weight: 300; max-width: 380px; }
+.ai-bubble-user { background: linear-gradient(135deg, #A07830, #C9A84C); border-color: transparent; border-radius: 12px 12px 3px 12px; color: #FFF; font-weight: 400; }
+.ai-chips { display: flex; flex-wrap: wrap; gap: 8px; padding-left: 44px; }
+.ai-chip { background: #F5F2EC; border: 1px solid #E0D8C8; color: #4A4438; font-family: inherit; font-size: 12px; padding: 7px 14px; border-radius: 100px; cursor: pointer; transition: 0.2s; }
 .ai-chip:hover { border-color: #C9A84C; color: #A07830; background: rgba(201,168,76,0.08); }
-.ai-input { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid #F0EAE0; }
-.ai-input input { flex: 1; background: #F5F2EC; border: 1px solid #E0D8C8; border-radius: 100px; padding: 8px 12px; color: #1A1A18; font-family: inherit; font-size: 12px; outline: none; transition: 0.2s; }
-.ai-input input:focus { border-color: #C9A84C; box-shadow: 0 0 0 2px rgba(201,168,76,0.1); }
+.ai-input { display: flex; gap: 10px; padding: 14px 18px; border-top: 1px solid #F0EAE0; flex-shrink: 0; background: #FAFAF8; }
+.ai-input input { flex: 1; background: #FFF; border: 1px solid #E0D8C8; border-radius: 100px; padding: 11px 18px; color: #1A1A18; font-family: inherit; font-size: 13px; outline: none; transition: 0.2s; }
+.ai-input input:focus { border-color: #C9A84C; box-shadow: 0 0 0 3px rgba(201,168,76,0.12); }
 .ai-input input::placeholder { color: #B0A898; }
-.ai-send { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, #A07830, #C9A84C); border: none; color: #FFF; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: 0.2s; }
-.ai-send:hover { transform: scale(1.08); box-shadow: 0 2px 10px rgba(160,120,48,0.35); }
+.ai-send { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #A07830, #C9A84C); border: none; color: #FFF; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: 0.2s; }
+.ai-send:hover { transform: scale(1.08); box-shadow: 0 3px 12px rgba(160,120,48,0.4); }
 
 /* ══ FOOTER ══ */
 .site-footer { border-top: 1px solid #E0D8C8; padding: 56px 40px 32px; background: #FAFAF8; }

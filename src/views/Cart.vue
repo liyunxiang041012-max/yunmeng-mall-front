@@ -53,13 +53,15 @@
 
           <!-- 店铺分组 -->
           <div v-for="shop in groupedItems" :key="shop.name" class="shop-group">
-            <div class="shop-head">
-              <div class="cb-wrap" @click="toggleShop(shop.name)">
-                <div :class="['cb', { checked: isShopAllSelected(shop.name), partial: isShopPartialSelected(shop.name) }]">
-                  <svg v-if="isShopAllSelected(shop.name)" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>
-                  <div v-else-if="isShopPartialSelected(shop.name)" class="cb-partial"></div>
-                </div>
-              </div>
+        <!-- ✅ 修改后的正确代码（读取 shop 对象上的属性） -->
+<div class="shop-head">
+  <div class="cb-wrap" @click="toggleShop(shop.name)">
+    <div :class="['cb', { checked: shop.isAllSelected, partial: shop.isPartialSelected }]">
+      <svg v-if="shop.isAllSelected" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>
+      <div v-else-if="shop.isPartialSelected" class="cb-partial"></div>
+    </div>
+  </div>
+
               <span class="sh-icon">🏪</span>
               <span class="sh-name">{{ shop.name }}</span>
               <span class="sh-free" v-if="shop.freeShip">免运费</span>
@@ -77,7 +79,7 @@
 
                 <!-- 大图 -->
                 <div class="ic-img-wrap">
-                  <img :src="item.image" :alt="item.name" class="ic-img" />
+                  <img :src="item.image" :alt="item.name" class="ic-img" @error="handleImageError" />
                   <span v-if="item.tag" class="ic-tag" :style="{ background: item.tagColor }">{{ item.tag }}</span>
                 </div>
 
@@ -88,11 +90,15 @@
                     <p class="ic-sku">{{ item.sku }}</p>
                     <div class="ic-badges">
                       <span v-for="b in item.badges" :key="b" class="ic-badge">{{ b }}</span>
+                      <!-- 价格变动提示 -->
+                      <span v-if="item.priceChanged" class="ic-badge price-changed">
+                        价格已变动
+                      </span>
                     </div>
                   </div>
                   <div class="ic-bottom">
                     <div class="ic-price-wrap">
-                      <span class="ic-price">¥{{ item.price }}</span>
+                      <span class="ic-price" :class="{ 'price-up': item.priceChanged && item.newPrice > item.snapshotPrice, 'price-down': item.priceChanged && item.newPrice < item.snapshotPrice }">¥{{ item.price }}</span>
                       <span class="ic-orig" v-if="item.originalPrice">¥{{ item.originalPrice }}</span>
                     </div>
                     <div class="ic-actions">
@@ -131,7 +137,7 @@
             <div class="rec-grid">
               <div v-for="item in recommendItems" :key="item.id" class="rec-card" @click="addToCart(item)">
                 <div class="rc-img-wrap">
-                  <img :src="item.image" :alt="item.name" class="rc-img" />
+                  <img :src="item.image" :alt="item.name" class="rc-img" @error="handleImageError" />
                   <div class="rc-add-mask">
                     <span>+ 加入购物车</span>
                   </div>
@@ -203,7 +209,7 @@
               <span class="pt-label">实付款</span>
               <div class="pt-num-wrap">
                 <span class="pt-sym">¥</span>
-                <span class="pt-num">{{ finalPrice.toFixed(2) }}</span>
+                <span class="pt-num">{{ finalPrice}}</span>
               </div>
             </div>
 
@@ -227,83 +233,330 @@
     </div>
   </div>
 </template>
-
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus' 
+import { getCartList, deleteCartItems, addToCart as addCartItemApi, updateCartItem } from '@/api/cart'
+import { createOrder } from '@/api/order'
+import nofoundImage from '@/assets/images/nofound.png'
+
 const router = useRouter()
 
-const cartItems = ref([
-  { id:1, shop:'云梦精选旗舰店', freeShip:true,  name:'极简无线降噪耳机 Pro',    sku:'黑色 / 标准版',   qty:1, price:89,  originalPrice:199, selected:true,  image:'https://picsum.photos/300/300?random=1',  tag:'秒杀', tagColor:'#E74C3C', badges:['7天无理由','官方正品'] },
-  { id:2, shop:'云梦精选旗舰店', freeShip:true,  name:'轻量碳纤维背包 20L',      sku:'深空灰 / 20L',    qty:2, price:129, originalPrice:299, selected:true,  image:'https://picsum.photos/300/300?random=2',  tag:'',     tagColor:'',        badges:['7天无理由'] },
-  { id:3, shop:'全球好物直邮',   freeShip:false, name:'AI智能降噪蓝牙耳机旗舰版', sku:'星空白 / 旗舰版', qty:1, price:599, originalPrice:null, selected:false, image:'https://picsum.photos/300/300?random=3',  tag:'新品', tagColor:'#8E44AD', badges:['30天退换','海外直邮'] },
-  { id:4, shop:'全球好物直邮',   freeShip:false, name:'香氛扩香石套装精品礼盒',   sku:'薰衣草 / 礼盒装', qty:1, price:59,  originalPrice:159, selected:false, image:'https://picsum.photos/300/300?random=4',  tag:'',     tagColor:'',        badges:['精品礼盒'] },
-])
+// 图片加载失败处理
+const handleImageError = (e) => {
+  e.target.src = nofoundImage
+}
 
+// ================= 状态管理 =================
+const cartItems = ref([])
 const showCoupon = ref(false)
 const appliedCoupon = ref(null)
 const availableCoupons = ref([
-  { id:1, discount:50, minOrder:299, name:'全品类通用券' },
-  { id:2, discount:30, minOrder:199, name:'数码专区专用' },
+  { id: 1, discount: 50, minOrder: 299, name: '全品类通用券' },
+  { id: 2, discount: 30, minOrder: 199, name: '数码专区专用' },
 ])
 const recommendItems = ref([
-  { id:101, name:'智能温控随行杯保温', price:168, image:'https://picsum.photos/280/280?random=10' },
-  { id:102, name:'手工研磨挂耳咖啡礼盒', price:89, image:'https://picsum.photos/280/280?random=11' },
-  { id:103, name:'北欧风无线充电台灯', price:219, image:'https://picsum.photos/280/280?random=12' },
-  { id:104, name:'真皮手工笔记本 A5', price:78, image:'https://picsum.photos/280/280?random=13' },
+  { id: 101, name: '智能温控随行杯保温', price: 168, image: 'https://picsum.photos/280/280?random=10' },
+  { id: 102, name: '手工研磨挂耳咖啡礼盒', price: 89, image: 'https://picsum.photos/280/280?random=11' },
+  { id: 103, name: '北欧风无线充电台灯', price: 219, image: 'https://picsum.photos/280/280?random=12' },
+  { id: 104, name: '真皮手工笔记本 A5', price: 78, image: 'https://picsum.photos/280/280?random=13' },
 ])
 const guarantees = [
-  { icon:'🔒', label:'安全支付' }, { icon:'🚚', label:'极速发货' },
-  { icon:'↩️', label:'7天退换' }, { icon:'💬', label:'在线客服' },
+  { icon: '🔒', label: '安全支付' }, { icon: '🚚', label: '极速发货' },
+  { icon: '↩️', label: '7天退换' }, { icon: '💬', label: '在线客服' },
 ]
+  
+// ================= 数据加载 =================
+const loadCartData = async () => {
+  try {
+    const res = await getCartList()
+    console.log('购物车接口返回的原始 res:', res)
+    
+    // 兼容不同的 Axios 拦截器返回格式
+    const rawData = res.data || res 
+    const items = Array.isArray(rawData) ? rawData : []
+    
+    items.forEach(item => {
+      item.qty = item.quantity || 1
+      item.name = item.skuName || '未知商品'
+      item.shop = item.shopName || `商家${item.shopId}`
+      item.selected = item.selected || false // 使用后端返回的选中状态
+      
+      // 直接使用后端返回的 priceChanged 标记
+      item.priceChanged = item.priceChanged || false
+      
+      // 价格单位转换（分 → 元）
+      // 1. 先保存快照价格（用于比较和显示差异）
+      if (item.snapshotPrice && typeof item.snapshotPrice === 'number') {
+        item.snapshotPrice = parseFloat((item.snapshotPrice / 100).toFixed(2))
+      } else {
+        item.snapshotPrice = 0
+      }
+      
+      // 2. 转换实时价格（用于显示和计算）
+      if (item.price && typeof item.price === 'number') {
+        item.price = parseFloat((item.price / 100).toFixed(2))
+      }
+      
+      // 3. 如果价格有变动，保存新价格（用于提交订单时显示差异）
+      if (item.priceChanged) {
+        item.newPrice = item.price // 当前实时价格
+      }
+      
+      // 补充前端展示需要的默认字段
+      item.freeShip = true 
+      item.originalPrice = null 
+      item.tag = ''
+      item.tagColor = ''
+      item.badges = []
+      item.sku = '默认规格' 
+    })
+    
+    cartItems.value = items
+  } catch (err) {
+    console.error('加载购物车失败:', err)
+    ElMessage.error('加载购物车失败')
+  }
+}
 
+
+onMounted(() => loadCartData())
+
+// ================= 计算属性 =================
 const groupedItems = computed(() => {
   const map = {}
   cartItems.value.forEach(item => {
-    if (!map[item.shop]) map[item.shop] = { name: item.shop, items: [], freeShip: item.freeShip, tipAmount: 0 }
+    if (!map[item.shop]) {
+      map[item.shop] = { 
+        name: item.shop, items: [], freeShip: item.freeShip, tipAmount: 0,
+        isAllSelected: false, isPartialSelected: false
+      }
+    }
     map[item.shop].items.push(item)
   })
-  Object.values(map).forEach(shop => {
+  
+  return Object.values(map).map(shop => {
+    const selectedCount = shop.items.filter(i => i.selected).length
+    shop.isAllSelected = selectedCount === shop.items.length && shop.items.length > 0
+    shop.isPartialSelected = selectedCount > 0 && selectedCount < shop.items.length
+    
     if (!shop.freeShip) {
       const total = shop.items.reduce((s, i) => s + i.price * i.qty, 0)
       shop.tipAmount = total < 199 ? +(199 - total).toFixed(0) : 0
     }
+    return shop
   })
-  return Object.values(map)
 })
 
-const totalCount     = computed(() => cartItems.value.reduce((s, i) => s + i.qty, 0))
-const selectedItems  = computed(() => cartItems.value.filter(i => i.selected))
-const selectedCount  = computed(() => selectedItems.value.reduce((s, i) => s + i.qty, 0))
-const subtotal       = computed(() => selectedItems.value.reduce((s, i) => s + i.price * i.qty, 0))
-const shippingFee    = computed(() => subtotal.value >= 199 || subtotal.value === 0 ? 0 : 12)
+const totalCount = computed(() => cartItems.value.reduce((s, i) => s + i.qty, 0))
+const selectedItems = computed(() => cartItems.value.filter(i => i.selected))
+const selectedCount = computed(() => selectedItems.value.reduce((s, i) => s + i.qty, 0))
+const subtotal = computed(() => selectedItems.value.reduce((s, i) => s + i.price * i.qty, 0))
+const shippingFee = computed(() => subtotal.value >= 199 || subtotal.value === 0 ? 0 : 12)
 const couponDiscount = computed(() => !appliedCoupon.value ? 0 : subtotal.value >= appliedCoupon.value.minOrder ? appliedCoupon.value.discount : 0)
-const finalPrice     = computed(() => Math.max(0, subtotal.value - couponDiscount.value + shippingFee.value))
-const savedAmount    = computed(() => {
+const finalPrice = computed(() => Math.max(0, subtotal.value - couponDiscount.value + shippingFee.value))
+const savedAmount = computed(() => {
   const orig = selectedItems.value.reduce((s, i) => s + (i.originalPrice || i.price) * i.qty, 0)
   return orig - subtotal.value + couponDiscount.value
 })
-const isAllSelected     = computed(() => cartItems.value.length > 0 && cartItems.value.every(i => i.selected))
-const isPartialSelected = computed(() => !isAllSelected.value && cartItems.value.some(i => i.selected))
-const isShopAllSelected     = (shop) => groupedItems.value.find(s => s.name === shop)?.items.every(i => i.selected) ?? false
-const isShopPartialSelected = (shop) => { const s = groupedItems.value.find(s => s.name === shop); return s && !s.items.every(i => i.selected) && s.items.some(i => i.selected) }
 
-const toggleItem      = (id) => { const i = cartItems.value.find(i => i.id === id); if (i) i.selected = !i.selected }
-const toggleSelectAll = () => { const v = !isAllSelected.value; cartItems.value.forEach(i => i.selected = v) }
-const toggleShop      = (shop) => { const s = groupedItems.value.find(s => s.name === shop); const v = !isShopAllSelected(shop); s?.items.forEach(i => i.selected = v) }
-const changeQty       = (id, d) => { const i = cartItems.value.find(i => i.id === id); if (i) i.qty = Math.max(1, i.qty + d) }
-const removeItem      = (id) => { cartItems.value = cartItems.value.filter(i => i.id !== id) }
-const moveToFav       = (id) => { removeItem(id) }
-const deleteSelected  = () => { cartItems.value = cartItems.value.filter(i => !i.selected) }
-const clearAll        = () => { cartItems.value = [] }
-const applyCoupon     = (cp) => { appliedCoupon.value = appliedCoupon.value?.id === cp.id ? null : cp; showCoupon.value = false }
-const addToCart       = (item) => {
-  const exist = cartItems.value.find(i => i.id === item.id)
-  if (exist) { exist.qty++; return }
-  cartItems.value.push({ ...item, shop:'云梦精选旗舰店', sku:'默认规格', selected:true, freeShip:true, originalPrice:null, tag:'', tagColor:'', badges:[] })
+const isAllSelected = computed(() => cartItems.value.length > 0 && cartItems.value.every(i => i.selected))
+const isPartialSelected = computed(() => !isAllSelected.value && cartItems.value.some(i => i.selected))
+
+// ================= 操作方法 =================
+const toggleItem = (id) => {
+  const i = cartItems.value.find(i => i.id === id)
+  if (i) i.selected = !i.selected
 }
-const checkout = () => { if (selectedCount.value > 0) alert(`即将结算 ${selectedCount.value} 件，总价 ¥${finalPrice.value.toFixed(2)}`) }
+
+const toggleSelectAll = () => {
+  const targetState = !isAllSelected.value
+  cartItems.value.forEach(i => i.selected = targetState)
+}
+
+const toggleShop = (shopName) => {
+  const shop = groupedItems.value.find(s => s.name === shopName)
+  if (!shop) return
+  const targetState = !shop.isAllSelected 
+  shop.items.forEach(i => i.selected = targetState)
+}
+
+// 👇 3. 修改更新数量：调用后端 updateCart 接口
+const changeQty = async (id, d) => {
+  const i = cartItems.value.find(i => i.id === id)
+  if (i) {
+    const newQty = Math.max(1, i.qty + d)
+    i.qty = newQty
+    try {
+      // 后端 CartDTO 需要 skuId 和 quantity
+      await updateCartItem({ skuId: i.skuId, quantity: newQty })
+    } catch (e) {
+      ElMessage.error('更新数量失败')
+    }
+  }
+}
+
+const removeItem = async (id) => {
+  try {
+    await deleteCartItems([id])
+    cartItems.value = cartItems.value.filter(i => i.id !== id)
+    ElMessage.success('删除成功')
+  } catch (e) {
+    ElMessage.error('删除失败')
+  }
+}
+
+const moveToFav = (id) => {
+  removeItem(id)
+  ElMessage.success('已移至收藏夹')
+}
+
+const deleteSelected = () => {
+  const ids = cartItems.value.filter(i => i.selected).map(i => i.id)
+  if (ids.length === 0) return
+  
+  ElMessageBox.confirm(`确认删除选中的 ${ids.length} 件商品吗？`, '提示', {
+    confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning'
+  }).then(async () => {
+    try {
+      await deleteCartItems(ids)
+      cartItems.value = cartItems.value.filter(i => !i.selected)
+      ElMessage.success('删除成功')
+    } catch (e) {
+      ElMessage.error('删除失败')
+    }
+  }).catch(() => {})
+}
+
+const clearAll = () => {
+  if (cartItems.value.length === 0) return
+  ElMessageBox.confirm('确认清空购物车？', '提示', {
+    confirmButtonText: '清空', cancelButtonText: '取消', type: 'warning'
+  }).then(async () => {
+    try {
+      const ids = cartItems.value.map(i => i.id)
+      await deleteCartItems(ids)
+      cartItems.value = []
+      ElMessage.success('购物车已清空')
+    } catch (e) {
+      ElMessage.error('清空失败')
+    }
+  }).catch(() => {})
+}
+
+const applyCoupon = (cp) => {
+  appliedCoupon.value = appliedCoupon.value?.id === cp.id ? null : cp
+  showCoupon.value = false
+}
+
+const checkout = async () => {
+  if (selectedCount.value === 0) {
+    ElMessage.warning('请先选择商品')
+    return
+  }
+
+  try {
+    // 先检测选中商品的价格是否有变动
+    const changedItems = selectedItems.value.filter(item => item.priceChanged)
+    
+    if (changedItems.length > 0) {
+      // 有价格变动，弹窗让用户确认
+      let message = '<div style="text-align: left;">'
+      message += '<p style="margin-bottom: 12px; color: #E74C3C; font-weight: 500;">以下商品价格已更新：</p>'
+      message += '<div style="background: #F8F9FA; padding: 12px; border-radius: 8px; margin-bottom: 12px;">'
+      
+      changedItems.forEach(item => {
+        const diff = item.newPrice - item.snapshotPrice
+        const changeText = diff > 0 ? `+￥${diff.toFixed(2)}` : `-￥${Math.abs(diff).toFixed(2)}`
+        const changeColor = diff > 0 ? '#E74C3C' : '#27AE60'
+        
+        message += `<div style="margin: 8px 0; padding: 8px; background: #FFF; border-radius: 6px;">`
+        message += `<p style="margin: 0 0 4px 0; font-size: 13px; font-weight: 500;">• ${item.name}</p>`
+        message += `<p style="margin: 0; font-size: 12px; color: #8A8070;">`
+        message += `原价：￥${item.snapshotPrice.toFixed(2)} → 新价：￥${item.newPrice.toFixed(2)} `
+        message += `<span style="color: ${changeColor}; font-weight: 500;">(${changeText})</span>`
+        message += `</p>`
+        message += `</div>`
+      })
+      
+      message += '</div>'
+      message += '<p style="color: #8A8070; font-size: 12px;">请确认后继续提交订单</p>'
+      message += '</div>'
+      
+      await ElMessageBox.confirm(
+        message,
+        '价格变动提示',
+        {
+          confirmButtonText: '确认提交',
+          cancelButtonText: '取消',
+          dangerouslyUseHTMLString: true,
+          type: 'warning'
+        }
+      )
+      
+      // 用户确认后，清除价格变动标记
+      changedItems.forEach(item => {
+        item.priceChanged = false
+      })
+    }
+    
+    // 构造创建订单的参数
+    const orderDTO = {
+      // 选中的商品 SKU ID 和数量
+      items: selectedItems.value.map(item => ({
+        skuId: item.skuId,
+        quantity: item.qty
+      })),
+      // 优惠券ID（如果有）
+      couponId: appliedCoupon.value?.id || null,
+      // 订单备注
+      note: ''
+    }
+
+    console.log('创建订单参数:', orderDTO)
+
+    // 调用后端创建订单接口
+    const res = await createOrder(orderDTO)
+    
+    // 后端直接返回订单ID字符串（Result<String>）
+    const orderId = res.data || res
+    
+    if (!orderId) {
+      ElMessage.error('订单创建失败，请重试')
+      return
+    }
+
+    // 跳转到支付页面，只传订单ID
+    router.push({
+      path: '/pay',
+      query: { orderId }
+    })
+
+  } catch (err) {
+    // 用户取消或请求失败
+    if (err === 'cancel' || err === 'close') {
+      return // 用户取消，不显示错误
+    }
+    console.error('创建订单失败:', err)
+    const errorMsg = err.response?.data?.message || err.response?.data?.msg || '订单创建失败，请重试'
+    ElMessage.error(errorMsg)
+  }
+}
+
+// 👇 4. 修改推荐区加购：传递 skuId 和 quantity
+const addToCart = async (item) => {
+  try {
+    // 后端 CartDTO 需要 skuId 和 quantity
+    await addCartItemApi({ skuId: item.id, quantity: 1 }) 
+    ElMessage.success('加入购物车成功')
+    await loadCartData() 
+  } catch (e) {
+    ElMessage.error('加入购物车失败')
+  }
+}
 </script>
+
 
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500&family=Space+Mono:wght@400;700&display=swap');
@@ -477,12 +730,20 @@ const checkout = () => { if (selectedCount.value > 0) alert(`即将结算 ${sele
   border: 1px solid #E0D8C8; padding: 2px 7px; border-radius: 4px;
   background: #FAFAF8;
 }
+.ic-badge.price-changed {
+  color: #E74C3C;
+  border-color: rgba(231, 76, 60, 0.3);
+  background: rgba(231, 76, 60, 0.08);
+  font-weight: 500;
+}
 
 .ic-bottom {
   display: flex; align-items: center; gap: 16px; margin-top: 10px;
 }
 .ic-price-wrap { display: flex; align-items: baseline; gap: 6px; }
 .ic-price { font-size: 17px; font-weight: 700; color: #A07830; font-family: 'Space Mono', monospace; }
+.ic-price.price-up { color: #E74C3C; }
+.ic-price.price-down { color: #27AE60; }
 .ic-orig  { font-size: 11px; color: #B0A898; text-decoration: line-through; font-family: 'Space Mono', monospace; }
 
 .ic-actions { display: flex; gap: 6px; margin-left: auto; }

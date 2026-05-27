@@ -73,48 +73,97 @@
       </div>
     </div>
   </template>
-  
   <script setup>
   import { ref, reactive } from 'vue'
   import { useRouter } from 'vue-router'
   import { ElMessage } from 'element-plus'
+  import { register,sendSmsCode } from '@/api/user'  // ← 引入真实接口
   
   const router = useRouter()
   const registerFormRef = ref()
   const loading = ref(false)
-  
+  const countdown = ref(0)
   const registerForm = reactive({
-    username: '',
-    email: '',
+    phone: '',        // ← 改成手机号
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    nickname: ''      // ← 昵称（可选）
   })
   
-  const validateConfirmPassword = (rule, value, callback) => {
-    if (value === '') {
-      callback(new Error('请再次输入密码'))
-    } else if (value !== registerForm.password) {
-      callback(new Error('两次输入密码不一致!'))
+const sendSmsCode = async () => {
+  // 先验证手机号格式
+  try {
+    await registerFormRef.value.validateField('phone')
+  } catch {
+    return  // 手机号格式不对，直接拦截
+  }
+
+  // 手机号格式正确，请求后端发验证码
+  try {
+    await sendSmsCode({ phone: registerForm.phone })  // ← 调后端接口
+    ElMessage.success('验证码已发送')
+
+    // 倒计时60秒，防止重复点击
+    countdown.value = 60
+    const timer = setInterval(() => {
+      countdown.value--
+      if (countdown.value <= 0) {
+        clearInterval(timer)
+      }
+    }, 1000)
+
+  } catch (err) {
+    ElMessage.error(err.response?.data?.message || '发送失败，请重试')
+  }
+}
+  // 手机号格式验证
+  const validatePhone = (rule, value, callback) => {
+    const phoneReg = /^1[3-9]\d{9}$/
+    if (!value) {
+      callback(new Error('请输入手机号'))
+    } else if (!phoneReg.test(value)) {
+      callback(new Error('请输入正确的手机号'))
     } else {
       callback()
     }
   }
   
+  // 确认密码验证
+  const validateConfirmPassword = (rule, value, callback) => {
+    if (!value) {
+      callback(new Error('请再次输入密码'))
+    } else if (value !== registerForm.password) {
+      callback(new Error('两次输入密码不一致'))
+    } else {
+      callback()
+    }
+  }
+  
+  // 密码强度验证：至少8位，且包含字母和数字
+const validatePassword = (rule, value, callback) => {
+  if (!value) {
+    callback(new Error('请输入密码'))
+  } else if (value.length < 8) {
+    callback(new Error('密码长度至少8位'))
+  } else if (!/^(?=.*[A-Za-z])(?=.*\d).+$/.test(value)) {
+    callback(new Error('密码必须包含字母和数字'))
+  } else {
+    callback()
+  }
+}
+
   const registerRules = {
-    username: [
-      { required: true, message: '请输入用户名', trigger: 'blur' },
-      { min: 3, max: 20, message: '用户名长度为3-20个字符', trigger: 'blur' }
-    ],
-    email: [
-      { required: true, message: '请输入邮箱地址', trigger: 'blur' },
-      { type: 'email', message: '请输入正确的邮箱地址', trigger: 'blur' }
+    phone: [
+      { validator: validatePhone, trigger: 'blur' }
     ],
     password: [
-      { required: true, message: '请输入密码', trigger: 'blur' },
-      { min: 6, max: 20, message: '密码长度为6-20个字符', trigger: 'blur' }
+    { validator: validatePassword, trigger: 'blur' }
     ],
     confirmPassword: [
       { validator: validateConfirmPassword, trigger: 'blur' }
+    ],
+    nickname: [
+      { max: 20, message: '昵称最多20个字符', trigger: 'blur' }
     ]
   }
   
@@ -124,23 +173,55 @@
     try {
       await registerFormRef.value.validate()
       loading.value = true
-      
-      // 模拟注册API调用
-      setTimeout(() => {
-        ElMessage.success('注册成功！')
-        router.push('/login')
-        loading.value = false
-      }, 1000)
-    } catch (error) {
-      console.error('注册验证失败:', error)
+  
+      // 调用真实注册接口
+      const res = await register({
+        phone: registerForm.phone,
+        password: registerForm.password,
+        nickname: registerForm.nickname || ''
+      })
+  
+      localStorage.setItem('token', res.token)
+      ElMessage.success('注册成功！')
+      router.push('/home')  // 注册成功直接去首页
+  
+    } catch (err) {
+      // 表单验证失败会走这里，接口失败也走这里
+      if (err.response?.data?.message) {
+        ElMessage.error(err.response.data.message)
+      }
+    } finally {
+      loading.value = false
     }
   }
+  // 发验证码按钮点击
+const sendCode = async () => {
+  // 单独验证手机号字段
+  try {
+    await registerFormRef.value.validateField('phone')
+  } catch {
+    // 手机号格式不对，直接return，不发验证码
+    return
+  }
+
+  // 手机号格式正确，发验证码
+  // await sendSmsCode({ phone: registerForm.phone })
+  ElMessage.success('验证码已发送')
   
+  // 倒计时60秒
+  countdown.value = 60
+  const timer = setInterval(() => {
+    countdown.value--
+    if (countdown.value <= 0) {
+      clearInterval(timer)
+    }
+  }, 1000)
+}
   const goToLogin = () => {
     router.push('/login')
   }
   </script>
-  
+
   <style scoped>
   .register-container {
     display: flex;

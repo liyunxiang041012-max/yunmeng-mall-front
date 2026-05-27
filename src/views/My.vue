@@ -13,21 +13,17 @@
         <div class="avatar-wrap">
           <div class="av-ring r1"></div>
           <div class="av-ring r2"></div>
-          <div class="av-core"><span class="av-initial">云</span></div>
-          <div class="av-edit">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-            </svg>
-          </div>
+          <div class="av-core">
+  <img :src="userInfo.avatar || defaultUserImage" alt="头像" class="av-img" @error="handleAvatarError" />
+</div>
+          <div class="av-edit"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></div>
         </div>
         <div class="uh-meta">
-          <h2 class="uh-name">云梦探索者</h2>
-          <p class="uh-uid"><span class="uid-label">UID</span>YM20260318</p>
+          <h2 class="uh-name">{{ userInfo.nickname || '云梦探索者' }}</h2>
+          <p class="uh-uid"><span class="uid-label">UID</span>{{ userInfo.id || 'YM--' }}</p>
           <div class="uh-tags">
-            <span class="utag gold">♛ 黄金会员</span>
-            <span class="utag blue">上海</span>
-            <span class="utag purple">2024年加入</span>
+            <span class="utag gold">{{ currentLevel.icon }}{{ currentLevel.name }}</span>
+
           </div>
         </div>
         <div class="uh-stats">
@@ -37,10 +33,7 @@
           </div>
         </div>
         <button class="uh-setting-btn">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="3"/>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-          </svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           设置
         </button>
       </div>
@@ -54,9 +47,7 @@
         <button class="ghost-btn" @click="orderTab='全部'">全部订单 →</button>
       </div>
       <div class="order-status-bar">
-        <div v-for="s in orderStatuses" :key="s.label"
-          :class="['ostatus', { active: orderTab === s.label }]"
-          @click="orderTab = s.label">
+        <div v-for="s in orderStatuses" :key="s.label" :class="['ostatus', { active: orderTab === s.label }]" @click="orderTab = s.label">
           <div class="ostatus-icon">{{ s.icon }}</div>
           <span class="ostatus-label">{{ s.label }}</span>
           <em v-if="s.count > 0" class="ostatus-badge">{{ s.count }}</em>
@@ -73,15 +64,9 @@
           </div>
           <div class="order-goods">
             <div v-for="g in order.goods" :key="g.id" class="order-good">
-              <img :src="g.image" :alt="g.name" />
-              <div class="og-info">
-                <p class="og-name">{{ g.name }}</p>
-                <p class="og-sku">{{ g.sku }}</p>
-              </div>
-              <div class="og-right">
-                <span class="og-price">¥{{ g.price }}</span>
-                <span class="og-qty">×{{ g.qty }}</span>
-              </div>
+              <img :src="g.image" :alt="g.name" @error="handleImageError" />
+              <div class="og-info"><p class="og-name">{{ g.name }}</p><p class="og-sku">{{ g.sku }}</p></div>
+              <div class="og-right"><span class="og-price">¥{{ g.price }}</span><span class="og-qty">×{{ g.qty }}</span></div>
             </div>
           </div>
           <div class="order-footer">
@@ -91,9 +76,7 @@
               <button v-if="order.status==='待收货'" class="oa-default">确认收货</button>
               <button v-if="order.status==='已完成'" class="oa-primary">再次购买</button>
               <button v-if="order.status==='已完成'" class="oa-default">写评价</button>
-              <button class="oa-default" @click="toggleLogistics(order.id)">
-                {{ expandedOrder === order.id ? '收起' : '查看详情' }}
-              </button>
+              <button class="oa-default" @click="toggleLogistics(order.id)">{{ expandedOrder === order.id ? '收起' : '查看详情' }}</button>
             </div>
           </div>
           <transition name="expand">
@@ -102,17 +85,43 @@
               <div v-for="(step, i) in order.logistics" :key="i" :class="['ltrack', { active: i===0 }]">
                 <div class="ltrack-dot"></div>
                 <div class="ltrack-line" v-if="i < order.logistics.length-1"></div>
-                <div class="ltrack-text">
-                  <p class="ltrack-desc">{{ step.desc }}</p>
-                  <p class="ltrack-time">{{ step.time }}</p>
-                </div>
+                <div class="ltrack-text"><p class="ltrack-desc">{{ step.desc }}</p><p class="ltrack-time">{{ step.time }}</p></div>
               </div>
             </div>
           </transition>
         </div>
-        <div v-if="filteredOrders.length === 0" class="empty-state">
-          <span class="empty-icon">📦</span>
-          <p>暂无{{ orderTab === '全部' ? '' : orderTab }}订单</p>
+        <div v-if="filteredOrders.length === 0" class="empty-state"><span class="empty-icon">📦</span><p>暂无{{ orderTab === '全部' ? '' : orderTab }}订单</p></div>
+      </div>
+    </section>
+
+    <!-- ══ 收货地址 ══ -->
+    <section class="section-block">
+      <div class="section-head">
+        <span class="eyebrow">ADDRESS</span>
+        <h2 class="section-title">收货地址</h2>
+        <button class="ghost-btn" @click="openAddDialog">+ 新增地址</button>
+      </div>
+
+      <div class="address-list" v-loading="addrLoading">
+        <div v-for="addr in addresses" :key="addr.id" :class="['addr-card', { 'is-default': addr.isDefault }]">
+          <span v-if="addr.isDefault" class="addr-default-tag">默认</span>
+          <div class="addr-main">
+            <div class="addr-info-row">
+  <span class="addr-name">{{ addr.name }}</span>
+  <span class="addr-sep">|</span>
+  <span class="addr-phone">{{ addr.phone }}</span>
+</div>
+            <p class="addr-full">📍 {{ addr.address }}</p>
+          </div>
+          <div class="addr-actions">
+            <button class="addr-btn" @click="openEditDialog(addr)">编辑</button>
+            <button class="addr-btn del" @click="handleDeleteAddr(addr.id)">删除</button>
+            <button v-if="!addr.isDefault" class="addr-btn" @click="handleSetDefault(addr.id)">设为默认</button>
+          </div>
+        </div>
+        <div v-if="!addrLoading && addresses.length === 0" class="empty-state">
+          <span class="empty-icon">📍</span>
+          <p>暂无收货地址，请先添加</p>
         </div>
       </div>
     </section>
@@ -130,10 +139,7 @@
           <p class="wc-bal-label">账户余额</p>
           <div class="wc-bal"><span class="wc-unit">¥</span><span class="wc-num">1,286.50</span></div>
           <p class="wc-sub">可用 ¥1,186.50 · 冻结 ¥100.00</p>
-          <div class="wc-btns">
-            <button class="wc-btn primary">+ 充值</button>
-            <button class="wc-btn">↑ 提现</button>
-          </div>
+          <div class="wc-btns"><button class="wc-btn primary">+ 充值</button><button class="wc-btn">↑ 提现</button></div>
         </div>
         <div class="wc-assets">
           <div v-for="a in walletAssets" :key="a.label" class="wasset">
@@ -147,21 +153,14 @@
         <div class="txn-topbar">
           <span class="txn-title">最近收支</span>
           <div class="txn-filters">
-            <button v-for="f in ['全部','收入','支出']" :key="f"
-              :class="['txn-f', { active: txnFilter === f }]"
-              @click="txnFilter = f">{{ f }}</button>
+            <button v-for="f in ['全部','收入','支出']" :key="f" :class="['txn-f', { active: txnFilter === f }]" @click="txnFilter = f">{{ f }}</button>
           </div>
         </div>
         <div class="txn-list">
           <div v-for="tx in filteredTxns" :key="tx.id" class="txn-item">
             <div class="txn-icon" :class="tx.type === '收入' ? 'income' : 'expense'">{{ tx.icon }}</div>
-            <div class="txn-info">
-              <p class="txn-name">{{ tx.name }}</p>
-              <p class="txn-time">{{ tx.time }}</p>
-            </div>
-            <span :class="['txn-amt', tx.type === '收入' ? 'income' : 'expense']">
-              {{ tx.type === '收入' ? '+' : '-' }}¥{{ tx.amount }}
-            </span>
+            <div class="txn-info"><p class="txn-name">{{ tx.name }}</p><p class="txn-time">{{ tx.time }}</p></div>
+            <span :class="['txn-amt', tx.type === '收入' ? 'income' : 'expense']">{{ tx.type === '收入' ? '+' : '-' }}¥{{ tx.amount }}</span>
           </div>
         </div>
       </div>
@@ -174,9 +173,7 @@
         <h2 class="section-title">历史浏览</h2>
         <div class="history-bar-right">
           <div class="hdate-tabs">
-            <button v-for="d in ['今天','昨天','更早']" :key="d"
-              :class="['hdate', { active: historyDate === d }]"
-              @click="historyDate = d">{{ d }}</button>
+            <button v-for="d in ['今天','昨天','更早']" :key="d" :class="['hdate', { active: historyDate === d }]" @click="historyDate = d">{{ d }}</button>
           </div>
           <button class="ghost-btn red-ghost" @click="clearHistory">清空</button>
         </div>
@@ -184,16 +181,13 @@
       <div v-if="historyItems.length > 0" class="history-grid">
         <div v-for="item in historyItems" :key="item.id" class="hcard">
           <div class="hcard-media">
-            <img :src="item.image" :alt="item.name" />
+            <img :src="item.image" :alt="item.name" @error="handleImageError" />
             <button class="hcard-del" @click.stop="removeHistory(item.id)">✕</button>
             <span class="hcard-time">{{ item.viewTime }}</span>
           </div>
           <div class="hcard-body">
             <p class="hcard-name">{{ item.name }}</p>
-            <div class="hcard-foot">
-              <span class="hcard-price">¥{{ item.price }}</span>
-              <button class="hcard-cart">加购</button>
-            </div>
+            <div class="hcard-foot"><span class="hcard-price">¥{{ item.price }}</span><button class="hcard-cart">加购</button></div>
           </div>
         </div>
       </div>
@@ -209,17 +203,8 @@
       </div>
       <div class="fav-grid">
         <div v-for="item in favItems" :key="item.id" class="fav-card">
-          <div class="fav-media">
-            <img :src="item.image" :alt="item.name" />
-            <button class="fav-heart" @click="removeFav(item.id)">♥</button>
-          </div>
-          <div class="fav-body">
-            <p class="fav-name">{{ item.name }}</p>
-            <div class="fav-foot">
-              <span class="fav-price">¥{{ item.price }}</span>
-              <button class="fav-buy">购买</button>
-            </div>
-          </div>
+          <div class="fav-media"><img :src="item.image" :alt="item.name" @error="handleImageError" /><button class="fav-heart" @click="removeFav(item.id)">♥</button></div>
+          <div class="fav-body"><p class="fav-name">{{ item.name }}</p><div class="fav-foot"><span class="fav-price">¥{{ item.price }}</span><button class="fav-buy">购买</button></div></div>
         </div>
       </div>
     </section>
@@ -233,81 +218,87 @@
       <div class="tools-grid">
         <div v-for="tool in toolItems" :key="tool.id" class="tool-card" :style="{'--tc': tool.color}">
           <div class="tool-icon">{{ tool.icon }}</div>
-          <div class="tool-info">
-            <span class="tool-name">{{ tool.name }}</span>
-            <span class="tool-desc">{{ tool.desc }}</span>
-          </div>
-          <svg class="tool-arrow" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M5 12h14M12 5l7 7-7 7"/>
-          </svg>
+          <div class="tool-info"><span class="tool-name">{{ tool.name }}</span><span class="tool-desc">{{ tool.desc }}</span></div>
+          <svg class="tool-arrow" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
           <em v-if="tool.badge" class="tool-badge">{{ tool.badge }}</em>
         </div>
       </div>
     </section>
+<!-- ══ 会员成长 ══ -->
+<section class="section-block">
+  <div class="section-head">
+    <span class="eyebrow">MEMBERSHIP</span>
+    <h2 class="section-title">会员成长</h2>
+  </div>
 
-    <!-- ══ 会员成长 ══ -->
-    <section class="section-block">
-      <div class="section-head">
-        <span class="eyebrow">MEMBERSHIP</span>
-        <h2 class="section-title">会员成长</h2>
-      </div>
-      <div class="member-card">
-        <div class="mc-glow"></div>
-        <div class="mc-left">
-          <div class="mc-badge-row">
-            <div class="mc-badge-icon">♛</div>
-            <div><p class="mc-level">黄金会员</p><p class="mc-exp-txt">3,200 EXP</p></div>
-          </div>
-          <div class="mc-progress-wrap">
-            <div class="mc-bar"><div class="mc-fill" style="width:64%"><div class="mc-fill-dot"></div></div></div>
-            <div class="mc-bar-labels"><span>3,200 EXP</span><span>距铂金还差 800 EXP</span></div>
-          </div>
-          <div class="mc-perks">
-            <span v-for="p in memberPerks" :key="p" class="mc-perk">✦ {{ p }}</span>
-          </div>
-        </div>
-        <div class="mc-right">
-          <div v-for="lvl in memberLevels" :key="lvl.name"
-            :class="['mc-lvl', { current: lvl.current, passed: lvl.passed }]">
-            <span class="mc-lvl-icon">{{ lvl.icon }}</span>
-            <div class="mc-lvl-info">
-              <span class="mc-lvl-name">{{ lvl.name }}</span>
-              <span class="mc-lvl-req">{{ lvl.req }}</span>
-            </div>
-            <span v-if="lvl.passed" class="mc-check">✓</span>
-            <span v-if="lvl.current" class="mc-cur-tag">当前</span>
-          </div>
+  <div class="member-card">
+    <!-- 背景光晕（可选） -->
+    <div class="mc-glow"></div>
+
+    <!-- 左侧：当前等级 + 进度条 + 权益 -->
+    <div class="mc-left">
+      <!-- 当前等级徽章 -->
+      <div class="mc-badge-row">
+        <div class="mc-badge-icon">{{ currentLevel.icon }}</div>
+        <div class="mc-badge-text">
+          <p class="mc-level">{{ currentLevel.name }}</p>
+          <p class="mc-exp-txt">{{ userInfo.experience }} EXP</p>
         </div>
       </div>
-    </section>
 
-    <!-- ══ 收货地址 ══ -->
-    <section class="section-block">
-      <div class="section-head">
-        <span class="eyebrow">ADDRESS</span>
-        <h2 class="section-title">收货地址</h2>
-        <button class="ghost-btn">+ 新增地址</button>
-      </div>
-      <div class="address-list">
-        <div v-for="addr in addresses" :key="addr.id"
-          :class="['addr-card', { 'is-default': addr.isDefault }]">
-          <span v-if="addr.isDefault" class="addr-default-tag">默认</span>
-          <div class="addr-main">
-            <div class="addr-name-row">
-              <span class="addr-name">{{ addr.name }}</span>
-              <span class="addr-phone">{{ addr.phone }}</span>
-            </div>
-            <p class="addr-full">{{ addr.full }}</p>
-          </div>
-          <div class="addr-actions">
-            <button class="addr-btn">编辑</button>
-            <button class="addr-btn del" @click="deleteAddr(addr.id)">删除</button>
-            <button v-if="!addr.isDefault" class="addr-btn" @click="setDefault(addr.id)">设为默认</button>
+      <!-- 经验进度条 -->
+      <div class="mc-progress-wrap">
+        <div class="mc-bar">
+          <div class="mc-fill" :style="{ width: levelProgress + '%' }">
+            <div class="mc-fill-dot"></div>
           </div>
         </div>
+        <div class="mc-bar-labels">
+          <span class="mc-exp-current">{{ userInfo.experience }} EXP</span>
+          <span class="mc-exp-next" v-if="!isMaxLevel">
+            距 {{ nextLevel?.name }} 还差 {{ nextLevelExpGap }} EXP
+          </span>
+          <span class="mc-exp-next" v-else>已达到最高等级 🎉</span>
+        </div>
       </div>
-    </section>
 
+      <!-- 会员权益 -->
+      <div class="mc-perks">
+        <span v-for="p in memberPerks" :key="p" class="mc-perk">✦ {{ p }}</span>
+      </div>
+
+      <!-- 升级提示按钮（可选） -->
+      <button v-if="!isMaxLevel" class="mc-upgrade-btn" @click="goToTasks">
+        去做购物赚更多 EXP →
+      </button>
+    </div>
+
+    <!-- 右侧：全等级路线图 -->
+    <div class="mc-right">
+      <div
+        v-for="(lvl, index) in memberLevels"
+        :key="lvl.name"
+        :class="['mc-lvl', { current: lvl.current, passed: lvl.passed }]"
+      >
+        <!-- 等级图标 -->
+        <span class="mc-lvl-icon">{{ lvl.icon }}</span>
+
+        <!-- 等级信息 -->
+        <div class="mc-lvl-info">
+          <span class="mc-lvl-name">{{ lvl.name }}</span>
+          <span class="mc-lvl-req">{{ lvl.req }}</span>
+        </div>
+
+        <!-- 状态标记 -->
+        <span v-if="lvl.passed" class="mc-check">✓</span>
+        <span v-if="lvl.current && !lvl.passed" class="mc-cur-tag">当前</span>
+
+        <!-- 连接线（除最后一个） -->
+        <div v-if="index < memberLevels.length - 1" class="mc-lvl-line"></div>
+      </div>
+    </div>
+  </div>
+</section>
     <!-- ══ 账号安全 ══ -->
     <section class="section-block">
       <div class="section-head">
@@ -317,149 +308,486 @@
       <div class="security-list">
         <div v-for="item in securityItems" :key="item.id" class="sec-item">
           <div class="sec-icon" :style="{ color: item.color }">{{ item.icon }}</div>
-          <div class="sec-info">
-            <p class="sec-name">{{ item.name }}</p>
-            <p class="sec-desc">{{ item.desc }}</p>
-          </div>
-          <div class="sec-right">
-            <span :class="['sec-status', item.ok ? 'ok' : 'warn']">{{ item.ok ? '已设置' : '未设置' }}</span>
-            <button class="sec-btn">{{ item.action }}</button>
-          </div>
+          <div class="sec-info"><p class="sec-name">{{ item.name }}</p><p class="sec-desc">{{ item.desc }}</p></div>
+          <div class="sec-right"><span :class="['sec-status', item.ok ? 'ok' : 'warn']">{{ item.ok ? '已设置' : '未设置' }}</span><button class="sec-btn">{{ item.action }}</button></div>
         </div>
       </div>
     </section>
+
+    <!-- ══ 新增 / 编辑地址弹窗 ══ -->
+    <transition name="dialog-fade">
+      <div v-if="showAddrDialog" class="addr-dialog-mask" @click.self="closeAddrDialog">
+        <div class="addr-dialog">
+          <div class="addr-dialog-head">
+            <h3>{{ isEditMode ? '编辑收货地址' : '新增收货地址' }}</h3>
+            <button class="dialog-close" @click="closeAddrDialog">✕</button>
+          </div>
+          <div class="addr-form">
+            <div class="form-item">
+              <label>收货人姓名</label>
+              <input v-model.trim="addrForm.name" placeholder="请输入姓名" />
+            </div>
+            <div class="form-item">
+              <label>手机号码</label>
+              <input v-model="addrForm.phone" type="tel" placeholder="11位手机号" />
+            </div>
+            <div class="form-item">
+              <label>详细地址</label>
+              <div class="form-item">
+  <label>所在地区</label>
+  <div class="region-selects">
+    <select v-model="addrForm.provinceCode" @change="handleRegionChange('province')">
+      <option value="" disabled>省/直辖市</option>
+      <option v-for="p in provinceOptions" :key="p.code" :value="p.code">{{ p.name }}</option>
+    </select>
+    <select v-model="addrForm.cityCode" @change="handleRegionChange('city')" :disabled="!addrForm.provinceCode">
+      <option value="" disabled>市/区</option>
+      <option v-for="c in cityOptions" :key="c.code" :value="c.code">{{ c.name }}</option>
+    </select>
+    <select v-model="addrForm.districtCode" :disabled="!addrForm.cityCode">
+      <option value="" disabled>区/县</option>
+      <option v-for="d in districtOptions" :key="d.code" :value="d.code">{{ d.name }}</option>
+    </select>
+  </div>
+</div>
+<div class="form-item">
+  <label>详细地址</label>
+  <textarea v-model.trim="addrForm.detail" placeholder="街道、小区、楼栋、门牌号等" rows="2"></textarea>
+</div>
+
+            </div>
+            <label class="form-check">
+              <input type="checkbox" v-model="addrForm.isDefault" />
+              <span>设为默认地址</span>
+            </label>
+            <div class="form-footer">
+              <button type="button" class="btn-ghost" @click="closeAddrDialog">取消</button>
+              <button type="button" class="btn-primary" :disabled="!isFormValid || addrSubmitting" @click="submitAddrForm">
+                {{ addrSubmitting ? '提交中...' : (isEditMode ? '保存修改' : '确认添加') }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </transition>
 
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { getUserDetail, getMyAddresses, addAddress, setDefaultAddress, updateAddress, deleteAddress } from '../api/user'
+import regionData from '@/assets/region.json' // 👈 替换为你存放JSON的实际路径
+import nofoundImage from '@/assets/images/nofound.png'
+import defaultUserImage from '@/assets/images/defaultuser.png'
+
+// 图片加载失败处理
+const handleImageError = (e) => {
+  e.target.src = nofoundImage
+}
+
+// 头像加载失败处理
+const handleAvatarError = (e) => {
+  e.target.src = defaultUserImage
+}
+
+// 地址联动数据
+const allRegions = ref(regionData.data?.children || [])
+const provinceOptions = computed(() => allRegions.value)
+const cityOptions = ref([])
+const districtOptions = ref([])
+
+// 表单结构更新：拆分省市区+详情
+const addrForm = ref({
+  name: '', phone: '',
+  provinceCode: '', provinceName: '',
+  cityCode: '', cityName: '',
+  districtCode: '', districtName: '',
+  detail: '', isDefault: false
+})
+
+// 表单验证
+const isFormValid = computed(() => {
+  const f = addrForm.value
+  return f.name.trim().length > 0 &&
+         /^1[3-9]\d{9}$/.test(f.phone) &&
+         f.provinceCode && f.cityCode &&
+         f.detail.trim().length > 0
+})
+
+// 联动处理（自动兼容直辖市：省->区，省->市->区）
+const handleRegionChange = (level) => {
+  const f = addrForm.value
+  if (level === 'province') {
+    const prov = allRegions.value.find(p => p.code === f.provinceCode)
+    f.provinceName = prov?.name || ''
+    // 清空下级
+    f.cityCode = ''; f.cityName = ''; f.districtCode = ''; f.districtName = ''
+    districtOptions.value = []
+    // 直辖市children直接是区(level:3)，普通省份是市(level:2)，统一塞入cityOptions
+    cityOptions.value = prov?.children || []
+  } 
+  else if (level === 'city') {
+    const city = cityOptions.value.find(c => c.code === f.cityCode)
+    f.cityName = city?.name || ''
+    // 清空区县
+    f.districtCode = ''; f.districtName = ''
+    districtOptions.value = city?.children || []
+  }
+}
+
+// 打开新增
+const openAddDialog = () => {
+  isEditMode.value = false
+  editingAddrId.value = null
+  addrForm.value = { name: '', phone: '', provinceCode: '', provinceName: '', cityCode: '', cityName: '', districtCode: '', districtName: '', detail: '', isDefault: false }
+  cityOptions.value = []
+  districtOptions.value = []
+  showAddrDialog.value = true
+}
+
+// 打开编辑（智能反解析后端返回的单字符串地址）
+const openEditDialog = (addr) => {
+  isEditMode.value = true
+  editingAddrId.value = addr.id
+  addrForm.value = { ...addrForm.value, name: addr.name, phone: addr.phone, isDefault: addr.isDefault, detail: addr.address }
+  
+  // 尝试将完整地址反解析回省市区（兼容格式：北京市东城区某某路1号 或 河北省石家庄市裕华区某某路1号）
+  parseAddressString(addr.address)
+  showAddrDialog.value = true
+}
+
+// 反解析辅助函数
+// 🔧 替换原有的 parseAddressString
+const parseAddressString = (fullAddr) => {
+  const f = addrForm.value
+  let rest = fullAddr.trim()
+
+  // 1. 清空旧状态，防止编辑时残留
+  f.provinceCode = ''; f.provinceName = ''
+  f.cityCode = ''; f.cityName = ''
+  f.districtCode = ''; f.districtName = ''
+  f.detail = ''
+  cityOptions.value = []
+  districtOptions.value = []
+
+  // 2. 匹配省
+  const prov = allRegions.value.find(p => rest.startsWith(p.name))
+  if (!prov) {
+    f.detail = fullAddr // 无法识别省级，全部放入详细地址
+    return
+  }
+  f.provinceCode = prov.code
+  f.provinceName = prov.name
+  rest = rest.slice(prov.name.length)
+  cityOptions.value = prov.children || [] // 直辖市这里直接是区列表
+
+  // 3. 匹配下一级（可能是地级市 level:2，也可能是直辖市的区 level:3）
+  const nextNode = prov.children?.find(c => rest.startsWith(c.name))
+  if (!nextNode) {
+    f.detail = rest.trim()
+    return
+  }
+
+  // 🎯 核心分支：根据 JSON 中的 level 字段区分层级
+  if (nextNode.level === 2) {
+    // ✅ 普通省份：匹配到的是地级市
+    f.cityCode = nextNode.code
+    f.cityName = nextNode.name
+    rest = rest.slice(nextNode.name.length)
+    districtOptions.value = nextNode.children || []
+
+    // 继续匹配区县
+    const district = nextNode.children?.find(d => rest.startsWith(d.name))
+    if (district) {
+      f.districtCode = district.code
+      f.districtName = district.name
+      rest = rest.slice(district.name.length)
+    }
+  } else if (nextNode.level === 3) {
+    // ✅ 直辖市：匹配到的直接就是区
+    // 为了与模板第二个 <select v-model="addrForm.cityCode"> 对齐，直接赋值给 cityCode
+    f.cityCode = nextNode.code
+    f.cityName = nextNode.name
+    districtOptions.value = [] // 第三个下拉框保持禁用
+    rest = rest.slice(nextNode.name.length)
+  }
+
+  // 4. 剩余部分即为详细门牌
+  f.detail = rest.trim()
+}
+
+
+const closeAddrDialog = () => {
+  showAddrDialog.value = false
+}
+
+// 提交表单（核心：拼接成单字符串）
+const submitAddrForm = async () => {
+  if (!isFormValid.value) return
+  addrSubmitting.value = true
+  try {
+    const f = addrForm.value
+    // 👇 拼接成后端需要的单字符串
+    const fullAddress = `${f.provinceName}${f.cityName}${f.districtName}${f.detail.trim()}`
+    
+    const payload = {
+      receiver:  f.name,
+      phone:     f.phone,
+      address:   fullAddress,
+      isDefault: f.isDefault ? 1 : 0,
+    }
+    if (isEditMode.value) {
+      payload.id = editingAddrId.value
+      await updateAddress(editingAddrId.value, payload)
+      ElMessage.success('地址已更新')
+    } else {
+      await addAddress(payload)
+      ElMessage.success('添加成功')
+    }
+    await loadAddr()
+    closeAddrDialog()
+  } catch (err) {
+    ElMessage.error(err.response?.data?.message || (isEditMode.value ? '修改失败' : '添加失败'))
+  } finally {
+    addrSubmitting.value = false
+  }
+}
+// 其他地址方法 (handleDeleteAddr, handleSetDefault, loadAddr) 保持你原有的不变
+
+// ─── 用户信息 ─────────────────────────────────────────────────
+const userInfo = ref({
+  id: '',
+  nickname: '',
+  avatar: '',
+  experience: 0,
+})
+
+const loadUserInfo = async () => {
+  try {
+    const res = await getUserDetail()
+    const data = res.data || {}
+    userInfo.value = {
+      id:         data.id || '',
+      nickname:   data.nickname || data.username || '云梦探索者',
+      avatar:     data.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${data.id || Math.random()}`,
+      experience: data.experience || 0,
+    }
+    // 根据 experience 动态更新会员等级
+    updateMemberLevels(userInfo.value.experience)
+  } catch {brand
+    // 静默失败，保留默认值
+  }
+}
 
 const userStats = ref([
-  { label:'关注', value:128 }, { label:'粉丝', value:56 },
-  { label:'收藏', value:34  }, { label:'足迹', value:210 },
+  { label: '关注', value: 128 }, { label: '粉丝', value: 56 },
+  { label: '收藏', value: 34  }, { label: '足迹', value: 210 },
 ])
+
+// ─── 订单 ─────────────────────────────────────────────────────
 const orderTab      = ref('全部')
 const expandedOrder = ref(null)
 const orderStatuses = ref([
-  { label:'全部',     icon:'📋', count:0 }, { label:'待付款',   icon:'⏳', count:1 },
-  { label:'待发货',   icon:'📦', count:2 }, { label:'待收货',   icon:'🚚', count:1 },
-  { label:'已完成',   icon:'✓',  count:0 }, { label:'退款售后', icon:'↩️', count:0 },
+  { label: '全部',     icon: '📋', count: 0 }, { label: '待付款',   icon: '⏳', count: 1 },
+  { label: '待发货',   icon: '📦', count: 2 }, { label: '待收货',   icon: '🚚', count: 1 },
+  { label: '已完成',   icon: '✓',  count: 0 }, { label: '退款售后', icon: '↩️', count: 0 },
 ])
 const orders = ref([
-  {
-    id:1, shop:'云梦精选旗舰店', no:'YM202603181423',
-    status:'待收货', statusClass:'st-shipping', total:'218.00', totalQty:2,
-    goods:[
-      { id:1, image:'https://picsum.photos/100/100?random=1', name:'极简无线降噪耳机', sku:'黑色 / 标准版', price:'89.00', qty:1 },
-      { id:2, image:'https://picsum.photos/100/100?random=2', name:'轻量碳纤维背包', sku:'深空灰 / 20L', price:'129.00', qty:1 },
+  { id: 1, shop: '云梦精选旗舰店', no: 'YM202603181423', status: '待收货', statusClass: 'st-shipping', total: '218.00', totalQty: 2,
+    goods: [
+      { id: 1, image: 'https://picsum.photos/100/100?random=1', name: '极简无线降噪耳机', sku: '黑色 / 标准版', price: '89.00', qty: 1 },
+      { id: 2, image: 'https://picsum.photos/100/100?random=2', name: '轻量碳纤维背包',   sku: '深空灰 / 20L', price: '129.00', qty: 1 },
     ],
-    logistics:[
-      { desc:'您的包裹已到达【上海浦东新区派送站】，派件员正在派送', time:'2026-03-18 09:30' },
-      { desc:'包裹已从【上海转运中心】发出', time:'2026-03-17 22:14' },
-      { desc:'商品已出库，快递公司揽收', time:'2026-03-17 14:05' },
+    logistics: [
+      { desc: '您的包裹已到达【上海浦东新区派送站】，派件员正在派送', time: '2026-03-18 09:30' },
+      { desc: '包裹已从【上海转运中心】发出', time: '2026-03-17 22:14' },
+      { desc: '商品已出库，快递公司揽收',     time: '2026-03-17 14:05' },
     ]
   },
-  {
-    id:2, shop:'全球好物直邮', no:'YM202603151820',
-    status:'已完成', statusClass:'st-done', total:'599.00', totalQty:1,
-    goods:[
-      { id:3, image:'https://picsum.photos/100/100?random=3', name:'AI智能降噪蓝牙耳机旗舰版', sku:'星空白 / 旗舰版', price:'599.00', qty:1 },
-    ],
-    logistics:[
-      { desc:'您已确认收货，交易完成', time:'2026-03-17 16:00' },
-      { desc:'包裹已签收', time:'2026-03-17 15:42' },
-    ]
+  { id: 2, shop: '全球好物直邮', no: 'YM202603151820', status: '已完成', statusClass: 'st-done', total: '599.00', totalQty: 1,
+    goods: [{ id: 3, image: 'https://picsum.photos/100/100?random=3', name: 'AI智能降噪蓝牙耳机旗舰版', sku: '星空白 / 旗舰版', price: '599.00', qty: 1 }],
+    logistics: [{ desc: '您已确认收货，交易完成', time: '2026-03-17 16:00' }, { desc: '包裹已签收', time: '2026-03-17 15:42' }]
   },
-  {
-    id:3, shop:'云梦精选旗舰店', no:'YM202603181956',
-    status:'待付款', statusClass:'st-pending', total:'349.00', totalQty:1,
-    goods:[
-      { id:4, image:'https://picsum.photos/100/100?random=4', name:'多功能空气炸锅无油烹饪', sku:'白色 / 4.5L', price:'349.00', qty:1 },
-    ],
-    logistics:[]
+  { id: 3, shop: '云梦精选旗舰店', no: 'YM202603181956', status: '待付款', statusClass: 'st-pending', total: '349.00', totalQty: 1,
+    goods: [{ id: 4, image: 'https://picsum.photos/100/100?random=4', name: '多功能空气炸锅无油烹饪', sku: '白色 / 4.5L', price: '349.00', qty: 1 }],
+    logistics: []
   },
 ])
-const filteredOrders = computed(() => {
-  if (orderTab.value === '全部') return orders.value
-  return orders.value.filter(o => o.status === orderTab.value)
-})
+const filteredOrders = computed(() => orderTab.value === '全部' ? orders.value : orders.value.filter(o => o.status === orderTab.value))
 const toggleLogistics = (id) => { expandedOrder.value = expandedOrder.value === id ? null : id }
 
+// ─── 地址 ─────────────────────────────────────────────────────
+const addresses      = ref([])
+const addrLoading    = ref(false)
+const showAddrDialog = ref(false)
+const isEditMode     = ref(false)
+const addrSubmitting = ref(false)
+const editingAddrId  = ref(null)
+
+const handleDeleteAddr = async (id) => {
+  try {
+    await ElMessageBox.confirm('确认删除该地址？', '提示', { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' })
+    await deleteAddress(id)
+    addresses.value = addresses.value.filter(a => a.id !== id)
+    ElMessage.success('删除成功')
+  } catch {
+    // 取消删除，不做任何事
+  }
+}
+
+const handleSetDefault = async (id) => {
+  try {
+    await setDefaultAddress(id)
+    addresses.value.forEach(a => { a.isDefault = (a.id === id) })
+    ElMessage.success('已设为默认地址')
+  } catch {
+    ElMessage.error('设置失败')
+  }
+}
+
+const loadAddr = async () => {
+  addrLoading.value = true
+  try {
+    const res = await getMyAddresses()
+    addresses.value = (res.data || []).map(item => ({
+      id:        item.id,
+      name:      item.receiver,
+      phone:     item.phone,
+      address:   item.address,
+      isDefault: item.isDefault === 1,
+      createTime: item.createTime,
+    }))
+  } catch (err) {
+    ElMessage.error(err.response?.data?.message || '地址加载失败')
+  } finally {
+    addrLoading.value = false
+  }
+}
+
+// ─── 钱包 ─────────────────────────────────────────────────────
 const txnFilter    = ref('全部')
 const walletAssets = ref([
-  { label:'优惠券', value:'8张',   color:'#a78bfa' },
-  { label:'积分',   value:'3,280', color:'#f0cc7a' },
-  { label:'红包',   value:'¥30',   color:'#ff5c75' },
-  { label:'礼品卡', value:'2张',   color:'#38bdf8' },
+  { label: '优惠券', value: '8张',   color: '#a78bfa' },
+  { label: '积分',   value: '3,280', color: '#f0cc7a' },
+  { label: '红包',   value: '¥30',   color: '#ff5c75' },
+  { label: '礼品卡', value: '2张',   color: '#38bdf8' },
 ])
 const transactions = ref([
-  { id:1, type:'支出', icon:'🛍️', name:'订单支付 · 极简降噪耳机', time:'2026-03-18 14:23', amount:'89.00'  },
-  { id:2, type:'收入', icon:'↩️', name:'退款到账 · 轻量背包',     time:'2026-03-17 09:11', amount:'129.00' },
-  { id:3, type:'支出', icon:'🛍️', name:'订单支付 · 香氛套装',     time:'2026-03-16 20:05', amount:'59.00'  },
-  { id:4, type:'收入', icon:'🎁', name:'新人红包奖励',             time:'2026-03-15 00:00', amount:'30.00'  },
-  { id:5, type:'支出', icon:'💳', name:'会员充值',                 time:'2026-03-14 16:40', amount:'98.00'  },
-  { id:6, type:'收入', icon:'💰', name:'余额充值',                 time:'2026-03-12 11:22', amount:'500.00' },
+  { id: 1, type: '支出', icon: '🛍️', name: '订单支付 · 极简降噪耳机', time: '2026-03-18 14:23', amount: '89.00'  },
+  { id: 2, type: '收入', icon: '↩️', name: '退款到账 · 轻量背包',     time: '2026-03-17 09:11', amount: '129.00' },
+  { id: 3, type: '支出', icon: '🛍️', name: '订单支付 · 香氛套装',     time: '2026-03-16 20:05', amount: '59.00'  },
+  { id: 4, type: '收入', icon: '🎁', name: '新人红包奖励',             time: '2026-03-15 00:00', amount: '30.00'  },
+  { id: 5, type: '支出', icon: '💳', name: '会员充值',                 time: '2026-03-14 16:40', amount: '98.00'  },
+  { id: 6, type: '收入', icon: '💰', name: '余额充值',                 time: '2026-03-12 11:22', amount: '500.00' },
 ])
-const filteredTxns = computed(() => {
-  if (txnFilter.value === '全部') return transactions.value
-  return transactions.value.filter(t => t.type === txnFilter.value)
-})
+const filteredTxns = computed(() => txnFilter.value === '全部' ? transactions.value : transactions.value.filter(t => t.type === txnFilter.value))
 
+// ─── 历史浏览 ─────────────────────────────────────────────────
 const historyDate  = ref('今天')
 const historyItems = ref([
-  { id:1, image:'https://picsum.photos/280/360?random=20', name:'极简风阔腿裤春秋新款',     price:'128',  viewTime:'10分钟前' },
-  { id:2, image:'https://picsum.photos/280/360?random=21', name:'AI智能降噪蓝牙耳机旗舰版', price:'599',  viewTime:'32分钟前' },
-  { id:3, image:'https://picsum.photos/280/360?random=22', name:'手工研磨挂耳咖啡礼盒20入', price:'89',   viewTime:'1小时前'  },
-  { id:4, image:'https://picsum.photos/280/360?random=23', name:'复古黑胶唱片机家用音响',   price:'1299', viewTime:'2小时前'  },
-  { id:5, image:'https://picsum.photos/280/360?random=24', name:'北欧风实木床头柜简约现代', price:'219',  viewTime:'3小时前'  },
-  { id:6, image:'https://picsum.photos/280/360?random=25', name:'香氛扩香石套装精品礼盒',   price:'59',   viewTime:'5小时前'  },
+  { id: 1, image: 'https://picsum.photos/280/360?random=20', name: '极简风阔腿裤春秋新款',     price: '128',  viewTime: '10分钟前' },
+  { id: 2, image: 'https://picsum.photos/280/360?random=21', name: 'AI智能降噪蓝牙耳机旗舰版', price: '599',  viewTime: '32分钟前' },
+  { id: 3, image: 'https://picsum.photos/280/360?random=22', name: '手工研磨挂耳咖啡礼盒20入', price: '89',   viewTime: '1小时前'  },
+  { id: 4, image: 'https://picsum.photos/280/360?random=23', name: '复古黑胶唱片机家用音响',   price: '1299', viewTime: '2小时前'  },
+  { id: 5, image: 'https://picsum.photos/280/360?random=24', name: '北欧风实木床头柜简约现代', price: '219',  viewTime: '3小时前'  },
+  { id: 6, image: 'https://picsum.photos/280/360?random=25', name: '香氛扩香石套装精品礼盒',   price: '59',   viewTime: '5小时前'  },
 ])
 const removeHistory = (id) => { historyItems.value = historyItems.value.filter(i => i.id !== id) }
 const clearHistory  = () => { historyItems.value = [] }
 
+// ─── 收藏 ─────────────────────────────────────────────────────
 const favItems = ref([
-  { id:1, image:'https://picsum.photos/280/340?random=30', name:'轻奢皮革钱包男士长款', price:'299' },
-  { id:2, image:'https://picsum.photos/280/340?random=31', name:'智能温控随行杯保温',   price:'168' },
-  { id:3, image:'https://picsum.photos/280/340?random=32', name:'真皮手工笔记本A5',     price:'78'  },
-  { id:4, image:'https://picsum.photos/280/340?random=33', name:'无线充电桌面台灯',     price:'399' },
+  { id: 1, image: 'https://picsum.photos/280/340?random=30', name: '轻奢皮革钱包男士长款', price: '299' },
+  { id: 2, image: 'https://picsum.photos/280/340?random=31', name: '智能温控随行杯保温',   price: '168' },
+  { id: 3, image: 'https://picsum.photos/280/340?random=32', name: '真皮手工笔记本A5',     price: '78'  },
+  { id: 4, image: 'https://picsum.photos/280/340?random=33', name: '无线充电桌面台灯',     price: '399' },
 ])
 const removeFav = (id) => { favItems.value = favItems.value.filter(i => i.id !== id) }
 
+// ─── 工具 ─────────────────────────────────────────────────────
 const toolItems = ref([
-  { id:1, icon:'⭐', name:'商品评价',   desc:'待评价 3 件',  color:'#f0cc7a', badge:'3'   },
-  { id:2, icon:'🔔', name:'消息通知',   desc:'2条未读',      color:'#a78bfa', badge:'2'   },
-  { id:3, icon:'🎫', name:'我的优惠券', desc:'8张可用',      color:'#f472b6', badge:'8'   },
-  { id:4, icon:'🎁', name:'礼品卡',     desc:'2张未使用',    color:'#22c55e', badge:null  },
-  { id:5, icon:'🤝', name:'邀请有礼',   desc:'邀好友得红包', color:'#ff6b35', badge:'NEW' },
-  { id:6, icon:'📊', name:'消费统计',   desc:'查看消费报告', color:'#38bdf8', badge:null  },
-  { id:7, icon:'📍', name:'收货地址',   desc:'管理收货地址', color:'#818cf8', badge:null  },
-  { id:8, icon:'🛡️', name:'账号安全',   desc:'保护账号安全', color:'#94a3b8', badge:null  },
+  { id: 1, icon: '⭐', name: '商品评价',   desc: '待评价 3 件',  color: '#f0cc7a', badge: '3'   },
+  { id: 2, icon: '🔔', name: '消息通知',   desc: '2条未读',      color: '#a78bfa', badge: '2'   },
+  { id: 3, icon: '🎫', name: '我的优惠券', desc: '8张可用',      color: '#f472b6', badge: '8'   },
+  { id: 4, icon: '🎁', name: '礼品卡',     desc: '2张未使用',    color: '#22c55e', badge: null  },
+  { id: 5, icon: '🤝', name: '邀请有礼',   desc: '邀好友得红包', color: '#ff6b35', badge: 'NEW' },
+  { id: 6, icon: '📊', name: '消费统计',   desc: '查看消费报告', color: '#38bdf8', badge: null  },
+  { id: 7, icon: '📍', name: '收货地址',   desc: '管理收货地址', color: '#818cf8', badge: null  },
+  { id: 8, icon: '🛡️', name: '账号安全',   desc: '保护账号安全', color: '#94a3b8', badge: null  },
 ])
+// 是否已达最高等级
+const isMaxLevel = computed(() => {
+  return currentLevel.value?.name === '钻石会员' // 或根据你的最高等级名调整
+})
 
-const memberPerks  = ['专属折扣','生日礼包','优先客服','积分加倍']
+// 下一等级信息
+const nextLevel = computed(() => {
+  const idx = memberLevels.value.findIndex(l => l.current)
+  if (idx === -1 || idx >= memberLevels.value.length - 1) return null
+  return memberLevels.value[idx + 1]
+})
+
+// 距下一等级还差多少 EXP
+const nextLevelExpGap = computed(() => {
+  if (!nextLevel.value) return 0
+  return nextLevel.value.minExp - userInfo.value.experience
+})
+// ─── 会员 ─────────────────────────────────────────────────────
+const memberPerks  = ['专属折扣', '生日礼包', '优先客服', '积分加倍']
+
+// 等级阈值配置
+const levelThresholds = [0, 500, 2000, 4000, 10000]
+
 const memberLevels = ref([
-  { name:'普通会员', icon:'○', req:'0 EXP',     passed:true,  current:false },
-  { name:'白银会员', icon:'◇', req:'500 EXP',   passed:true,  current:false },
-  { name:'黄金会员', icon:'◆', req:'2000 EXP',  passed:false, current:true  },
-  { name:'铂金会员', icon:'✦', req:'4000 EXP',  passed:false, current:false },
-  { name:'钻石会员', icon:'♛', req:'10000 EXP', passed:false, current:false },
+  { name: '普通会员', icon: '○', req: '0 EXP',     minExp: 0     },
+  { name: '白银会员', icon: '◇', req: '500 EXP',   minExp: 500   },
+  { name: '黄金会员', icon: '◆', req: '2000 EXP',  minExp: 2000  },
+  { name: '铂金会员', icon: '✦', req: '4000 EXP',  minExp: 4000  },
+  { name: '钻石会员', icon: '♛', req: '10000 EXP', minExp: 10000 },
 ])
 
-const addresses = ref([
-  { id:1, name:'李小云', phone:'138****8888', full:'上海市浦东新区世纪大道100号 XX大厦 2201室', isDefault:true  },
-  { id:2, name:'李小云', phone:'138****8888', full:'北京市朝阳区三里屯路19号 XX公寓 B栋 305室',   isDefault:false },
-])
-const deleteAddr = (id) => { addresses.value = addresses.value.filter(a => a.id !== id) }
-const setDefault = (id) => { addresses.value.forEach(a => a.isDefault = a.id === id) }
+// 根据 experience 动态计算当前等级
+const updateMemberLevels = (exp) => {
+  memberLevels.value = memberLevels.value.map((level, index) => {
+    const nextExp = levelThresholds[index + 1] ?? Infinity
+    return {
+      ...level,
+      passed:  exp >= nextExp,
+      current: exp >= level.minExp && exp < nextExp,
+    }
+  })
+}
 
+// 当前等级信息
+const currentLevel = computed(() => memberLevels.value.find(l => l.current) || memberLevels.value[0])
+
+// 当前等级进度百分比
+const levelProgress = computed(() => {
+  const exp = userInfo.value.experience
+  const idx = memberLevels.value.findIndex(l => l.current)
+  if (idx === -1 || idx === memberLevels.value.length - 1) return 100
+  const cur = levelThresholds[idx]
+  const next = levelThresholds[idx + 1]
+  return Math.min(100, Math.round(((exp - cur) / (next - cur)) * 100))
+})
+
+// ─── 安全 ─────────────────────────────────────────────────────
 const securityItems = ref([
-  { id:1, icon:'🔑', name:'登录密码', desc:'建议定期修改密码',  color:'#a78bfa', ok:true,  action:'修改'    },
-  { id:2, icon:'📱', name:'手机绑定', desc:'138****8888',       color:'#22c55e', ok:true,  action:'更换'    },
-  { id:3, icon:'📧', name:'邮箱绑定', desc:'未绑定邮箱',        color:'#ff5c75', ok:false, action:'立即绑定' },
-  { id:4, icon:'👆', name:'生物识别', desc:'指纹/面容快捷登录', color:'#38bdf8', ok:false, action:'去开启'  },
-  { id:5, icon:'🛡️', name:'实名认证', desc:'已完成实名认证',    color:'#f0cc7a', ok:true,  action:'查看'    },
+  { id: 1, icon: '🔑', name: '登录密码', desc: '建议定期修改密码',  color: '#a78bfa', ok: true,  action: '修改'    },
+  { id: 2, icon: '📱', name: '手机绑定', desc: '138****8888',       color: '#22c55e', ok: true,  action: '更换'    },
+  { id: 3, icon: '📧', name: '邮箱绑定', desc: '未绑定邮箱',        color: '#ff5c75', ok: false, action: '立即绑定' },
+  { id: 4, icon: '👆', name: '生物识别', desc: '指纹/面容快捷登录', color: '#38bdf8', ok: false, action: '去开启'  },
+  { id: 5, icon: '🛡️', name: '实名认证', desc: '已完成实名认证',    color: '#f0cc7a', ok: true,  action: '查看'    },
 ])
+
+
+// ─── 初始化 ───────────────────────────────────────────────────
+onMounted(() => {
+  loadUserInfo()
+  loadAddr()
+})
 </script>
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@200;300;400;500&family=Space+Mono:wght@400;700&display=swap');
@@ -563,13 +891,33 @@ const securityItems = ref([
   50%     { opacity: .2; transform: translate(-50%,-50%) scale(1.04); }
 }
 .av-core {
-  width: 82px; height: 82px; border-radius: 22px;
-  background: linear-gradient(135deg, #C9A84C, #EDD97A);
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 4px 20px rgba(201,168,76,0.4);
-  position: relative; z-index: 1;
+  width: 72px;
+  height: 72px;
+  border-radius: 20px; /* ≈ 28% 圆角，比方块柔，比圆克制 */
+  background: #f5f0e6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e0d9c9;
 }
-.av-initial { font-size: 32px; font-weight: 500; color: #FFF; }
+
+.av-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.av-initial {
+  font-size: 28px; /* 字号随尺寸微调 */
+  font-weight: 500;
+  color: #7a6b55;
+  text-align: center;
+  line-height: 1;
+}
 .av-edit {
   position: absolute; bottom: -4px; right: -4px; z-index: 2;
   width: 26px; height: 26px; border-radius: 50%;
@@ -813,7 +1161,41 @@ const securityItems = ref([
 .mc-lvl-req  { font-size: 10px; color: var(--text3); font-family: 'Space Mono', monospace; }
 .mc-check    { color: #27AE60; font-size: 12px; font-weight: 700; }
 .mc-cur-tag  { font-size: 9px; color: var(--gold); font-weight: 600; padding: 2px 7px; border-radius: 100px; background: var(--gold-bg); border: 1px solid rgba(201,168,76,0.3); }
+/* 会员升级引导按钮 */
+.mc-upgrade-btn {
+  background: linear-gradient(135deg, #c9a84c, #b08f3a); /* 金色渐变，柔和不刺眼 */
+  color: white;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 24px; /* 圆润但不夸张 */
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(196, 168, 76, 0.2);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+}
 
+.mc-upgrade-btn:hover {
+  background: linear-gradient(135deg, #d1b55f, #b89a4a);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(196, 168, 76, 0.3);
+}
+
+.mc-upgrade-btn:active {
+  transform: translateY(0);
+}
+
+/* 小屏适配（可选） */
+@media (max-width: 768px) {
+  .mc-upgrade-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
 /* ══ 地址 ══ */
 .address-list { display: flex; flex-direction: column; gap: 10px; }
 .addr-card { display: flex; align-items: center; gap: 24px; background: #FFF; border: 1px solid var(--border); border-radius: 14px; padding: 18px 22px; position: relative; transition: .2s; box-shadow: var(--shadow); }
@@ -830,7 +1212,11 @@ const securityItems = ref([
 .addr-btn:hover { border-color: var(--gold-hi); color: var(--gold); }
 .addr-btn.del { border-color: rgba(192,57,43,0.2); color: #C0392B; }
 .addr-btn.del:hover { border-color: var(--red); background: rgba(192,57,43,0.05); }
-
+.addr-sep {
+  color: #ddd;
+  font-weight: 300;
+  margin: 0 6px;
+}
 /* ══ 安全 ══ */
 .security-list { display: flex; flex-direction: column; gap: 8px; }
 .sec-item { display: flex; align-items: center; gap: 16px; padding: 18px 22px; border-radius: 12px; background: #FFF; border: 1px solid var(--border); transition: .2s; box-shadow: var(--shadow); }
@@ -903,4 +1289,113 @@ body, #app {
   background: #F5F2EC !important;
   color: #1A1A18;
 }
+/* ══ 地址弹窗 ══ */
+.addr-dialog-mask {
+  position: fixed; inset: 0; background: rgba(26,26,24,0.45);
+  display: flex; align-items: center; justify-content: center; z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+.addr-dialog {
+  background: #FFF; border-radius: var(--radius); padding: 28px;
+  width: 90%; max-width: 420px; box-shadow: var(--shadow2); border: 1px solid var(--border);
+}
+.addr-dialog-head {
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;
+}
+.addr-dialog-head h3 { font-size: 18px; font-weight: 500; color: var(--text); }
+.dialog-close {
+  background: none; border: none; font-size: 18px; color: var(--text3); cursor: pointer; padding: 4px;
+}
+.dialog-close:hover { color: var(--red); }
+
+.addr-form .form-item { margin-bottom: 16px; }
+.addr-form label { display: block; font-size: 12px; color: var(--text2); margin-bottom: 6px; font-weight: 500; }
+.addr-form input, .addr-form textarea {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px;
+  font-family: inherit; font-size: 14px; color: var(--text); background: var(--bg);
+  transition: .2s; outline: none;
+}
+.addr-form input:focus, .addr-form textarea:focus { border-color: var(--gold-hi); box-shadow: 0 0 0 3px var(--gold-bg); }
+.addr-form textarea { resize: vertical; }
+
+.form-check {
+  display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text2);
+  cursor: pointer; margin-bottom: 20px;
+}
+.form-check input { accent-color: var(--gold); width: 14px; height: 14px; }
+
+.form-footer { display: flex; gap: 12px; margin-top: 24px; }
+.btn-ghost, .btn-primary {
+  flex: 1; padding: 10px; border-radius: 100px; font-family: inherit; font-size: 13px;
+  cursor: pointer; transition: .2s; border: none; font-weight: 500;
+}
+.btn-ghost { background: var(--bg); border: 1px solid var(--border); color: var(--text3); }
+.btn-ghost:hover { border-color: var(--gold-hi); color: var(--gold); }
+.btn-primary { background: linear-gradient(135deg, var(--gold-hi), var(--gold)); color: #FFF; }
+.btn-primary:hover { filter: brightness(1.05); }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
+
+/* 弹窗动画 */
+.dialog-fade-enter-active, .dialog-fade-leave-active { transition: opacity .2s ease; }
+.dialog-fade-enter-from, .dialog-fade-leave-to { opacity: 0; }
+/* 📍 省市区联动选择器专属样式（追加到 <style scoped> 底部） */
+/* 📍 省市区联动选择器（已完全对齐你的 Design Tokens） */
+.addr-form .region-selects {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.addr-form .region-selects select {
+  flex: 1;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--text);
+  background-color: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color .2s, box-shadow .2s;
+  /* 移除浏览器默认样式 */
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  /* 自定义下拉箭头（柔和中性色，不干扰主题） */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23b0b0b0' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 14px;
+  padding-right: 32px;
+}
+
+.addr-form .region-selects select:hover {
+  border-color: var(--gold-hi);
+}
+
+.addr-form .region-selects select:focus {
+  border-color: var(--gold-hi);
+  box-shadow: 0 0 0 3px var(--gold-bg);
+}
+
+/* 禁用态（未选上级时） */
+.addr-form .region-selects select:disabled {
+  background-color: var(--bg);
+  color: var(--text3);
+  cursor: not-allowed;
+  border-color: var(--border);
+  opacity: 0.6;
+  background-image: none;
+}
+
+/* 移动端适配 */
+@media (max-width: 400px) {
+  .addr-form .region-selects {
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+
 </style>

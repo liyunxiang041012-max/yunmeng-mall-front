@@ -223,8 +223,13 @@
               <label>设置密码</label>
               <div class="input-wrap" :class="{ focused: focus.regPwd }">
                 <svg class="fi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                <input v-model="regForm.password" :type="showRegPwd ? 'text' : 'password'" placeholder="8位以上，含字母和数字"
-                  @focus="focus.regPwd=true" @blur="focus.regPwd=false" />
+              <input 
+  v-model="regForm.password" 
+  :type="showRegPwd ? 'text' : 'password'" 
+  placeholder="8位以上，含字母和数字"
+  @focus="focus.regPwd = true" 
+  @blur="() => { focus.regPwd = false; handleRegPasswordBlur(); }" 
+/>
                 <button type="button" class="eye-btn" @click="showRegPwd=!showRegPwd">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="15" height="15">
                     <template v-if="showRegPwd"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></template>
@@ -276,9 +281,14 @@
 
 <script setup>
 import { ref, reactive, computed, onUnmounted } from 'vue'
-import router from '@/router'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { login, register, sendSmsCode } from '../api/user'
 
-const mode        = ref('login')   // 'login' | 'register'
+const route = useRoute()
+const router = useRouter()
+
+const mode        = ref('login')
 const loginMode   = ref('password')
 const qrPlatform  = ref('wechat')
 const showPwd     = ref(false)
@@ -287,59 +297,52 @@ const submitting  = ref(false)
 const regSubmitting = ref(false)
 
 const focus = reactive({
-  account:false, password:false, phone:false, smsCode:false,
-  regPhone:false, regCode:false, regPwd:false, nickname:false
+  account: false, password: false, phone: false, smsCode: false,
+  regPhone: false, regCode: false, regPwd: false, nickname: false
 })
-const errors = reactive({ account:'', regPhone:'' })
+const errors = reactive({ account: '', regPhone: '' })
 
-const loginForm = reactive({ account:'', password:'', remember:false })
-const smsForm   = reactive({ phone:'', code:'' })
-const regForm   = reactive({ phone:'', code:'', password:'', nickname:'', agree:false })
+const loginForm = reactive({ account: '', password: '', remember: false })
+const smsForm   = reactive({ phone: '', code: '' })
+const regForm   = reactive({ phone: '', code: '', password: '', nickname: '', agree: false })
 
-const validateAccount  = () => { if (!loginForm.account) errors.account = '请输入手机号或邮箱' }
+// ── 账号 & 手机号验证 ──
+const validateAccount = () => {
+  if (!loginForm.account) errors.account = '请输入手机号或邮箱'
+  else errors.account = ''
+}
+
 const validateRegPhone = () => {
   if (!regForm.phone) errors.regPhone = '请输入手机号'
-  else if (!/^1\d{10}$/.test(regForm.phone)) errors.regPhone = '请输入正确的手机号格式'
+  else if (!/^1[3-9]\d{9}$/.test(regForm.phone)) errors.regPhone = '请输入正确的手机号格式'
   else errors.regPhone = ''
 }
 
-const smsCD = ref(0); let smsT = null
-const regCD = ref(0); let regT = null
-const sendSms    = () => { if (!smsForm.phone) return; smsCD.value=60; smsT=setInterval(()=>{ smsCD.value--; if(smsCD.value<=0) clearInterval(smsT) },1000) }
-const sendRegSms = () => { if (!regForm.phone) return; regCD.value=60; regT=setInterval(()=>{ regCD.value--; if(regCD.value<=0) clearInterval(regT) },1000) }
-
-const pwdStr = computed(() => {
-  const p = regForm.password; if (!p) return 0
-  let s = 0
-  if (p.length >= 8) s++
-  if (/[A-Za-z]/.test(p) && /\d/.test(p)) s++
-  if (/[^A-Za-z0-9]/.test(p)) s++
-  return s
-})
-
-const qrTimer = ref(120); const qrExpired = ref(false)
-let qrI = setInterval(() => { qrTimer.value--; if(qrTimer.value<=0){ qrExpired.value=true; clearInterval(qrI) } }, 1000)
-const refreshQr = () => {
-  qrTimer.value=120; qrExpired.value=false; clearInterval(qrI)
-  qrI = setInterval(()=>{ qrTimer.value--; if(qrTimer.value<=0){ qrExpired.value=true; clearInterval(qrI) } },1000)
+// ── 注册密码验证（核心新增）──
+const validateRegPassword = (showMsg = true) => {
+  const p = regForm.password
+  if (!p) {
+    if (showMsg) ElMessage.error('请输入密码')
+    return false
+  }
+  if (p.length < 8) {
+    if (showMsg) ElMessage.error('密码长度至少8位')
+    return false
+  }
+  if (!/^(?=.*[A-Za-z])(?=.*\d)/.test(p)) {
+    if (showMsg) ElMessage.error('密码必须包含字母和数字')
+    return false
+  }
+  return true
 }
 
-const privileges = [
-  { icon:'🛡️', title:'正品保障', desc:'官方授权，假一赔十' },
-  { icon:'✈️', title:'全球直邮', desc:'1000+ 海外品牌直达' },
-  { icon:'🎁', title:'会员特权', desc:'专属券、积分、生日礼遇' },
-]
-const stats = [
-  { num:'1200万+', label:'注册用户' },
-  { num:'800万+',  label:'优质商品' },
-  { num:'98.6%',   label:'好评率' },
-]
-
-// ══ 写入登录状态（三个 key 缺一不可）══
-const saveLoginState = (name) => {
-  localStorage.setItem('isLogin',      'true')   // ← 登录态
-  localStorage.setItem('userName',     name)      // ← 用户名/头像
-  localStorage.setItem('justLoggedIn', 'true')   // ← 触发 Splash
+// blur 时轻量提示（不阻断，只提醒）
+const handleRegPasswordBlur = () => {
+  const p = regForm.password
+  if (p && !validateRegPassword(false)) {
+    // 只提示一次，避免频繁打扰
+    ElMessage.warning('密码需至少8位，且包含字母和数字')
+  }
 }
 
 // ══ 登录 ══
@@ -347,26 +350,149 @@ const handleLogin = async () => {
   validateAccount()
   if (errors.account) return
   submitting.value = true
-  await new Promise(r => setTimeout(r, 800))
-  submitting.value = false
-  saveLoginState(loginForm.account)
-  router.push('/home')
+  try {
+    const res = await login({
+      account: loginForm.account,
+      password: loginForm.password
+    })
+    saveLoginState(res.nickname || res.username)
+    localStorage.setItem('token', res.data.token)
+    const redirect = route.query.redirect || '/home'
+    router.push(redirect)
+  } catch (err) {
+    errors.account = err.response?.data?.message || '登录失败，请重试'
+  } finally {
+    submitting.value = false
+  }
 }
 
 // ══ 注册 ══
 const handleRegister = async () => {
-  if (!regForm.agree) return
+  if (!regForm.agree) {
+    ElMessage.warning('请先同意用户协议')
+    return
+  }
+
   validateRegPhone()
   if (errors.regPhone) return
+
+  if (!regForm.code) {
+    ElMessage.error('请输入验证码')
+    return
+  }
+
+  // 👇 关键：校验密码强度
+  if (!validateRegPassword()) return
+
   regSubmitting.value = true
-  await new Promise(r => setTimeout(r, 800))
-  regSubmitting.value = false
-  const name = regForm.nickname || regForm.phone
-  saveLoginState(name)
-  router.push('/home')
+  try {
+    const res = await register({
+      phone: regForm.phone,
+      code: regForm.code,
+      password: regForm.password,
+      nickname: regForm.nickname || ''
+    })
+    saveLoginState(res.nickname || res.phone)
+    localStorage.setItem('token', res.token)
+    ElMessage.success('注册成功！')
+    router.push('/home')
+  } catch (err) {
+    ElMessage.error(err.response?.data?.message || '注册失败，请重试')
+  } finally {
+    regSubmitting.value = false
+  }
 }
 
-onUnmounted(() => { clearInterval(smsT); clearInterval(regT); clearInterval(qrI) })
+// ══ 发送验证码 ══
+const smsCD = ref(0); let smsT = null
+const regCD = ref(0); let regT = null
+
+const sendSms = () => {
+  if (!smsForm.phone) return
+  smsCD.value = 60
+  smsT = setInterval(() => {
+    smsCD.value--
+    if (smsCD.value <= 0) clearInterval(smsT)
+  }, 1000)
+}
+
+const sendRegSms = async () => {
+  validateRegPhone()
+  if (errors.regPhone) return
+
+  try {
+    await sendSmsCode({ phone: regForm.phone })
+    ElMessage.success('验证码已发送')
+    regCD.value = 60
+    regT = setInterval(() => {
+      regCD.value--
+      if (regCD.value <= 0) clearInterval(regT)
+    }, 1000)
+  } catch (err) {
+    ElMessage.error(err.response?.data?.message || '发送失败，请重试')
+  }
+}
+
+// ══ 密码强度计算（用于 UI 展示）══
+const pwdStr = computed(() => {
+  const p = regForm.password
+  if (!p) return 0
+  let s = 0
+  if (p.length >= 8) s++
+  if (/[A-Za-z]/.test(p) && /\d/.test(p)) s++
+  if (/[^A-Za-z0-9]/.test(p)) s++
+  return s
+})
+
+// ══ 二维码相关 ══
+const qrTimer = ref(120)
+const qrExpired = ref(false)
+let qrI = setInterval(() => {
+  qrTimer.value--
+  if (qrTimer.value <= 0) {
+    qrExpired.value = true
+    clearInterval(qrI)
+  }
+}, 1000)
+
+const refreshQr = () => {
+  qrTimer.value = 120
+  qrExpired.value = false
+  clearInterval(qrI)
+  qrI = setInterval(() => {
+    qrTimer.value--
+    if (qrTimer.value <= 0) {
+      qrExpired.value = true
+      clearInterval(qrI)
+    }
+  }, 1000)
+}
+
+// ══ 页面数据 ══
+const privileges = [
+  { icon: '🛡️', title: '正品保障', desc: '官方授权，假一赔十' },
+  { icon: '✈️', title: '全球直邮', desc: '1000+ 海外品牌直达' },
+  { icon: '🎁', title: '会员特权', desc: '专属券、积分、生日礼遇' },
+]
+const stats = [
+  { num: '1200万+', label: '注册用户' },
+  { num: '800万+', label: '优质商品' },
+  { num: '98.6%', label: '好评率' },
+]
+
+// ══ 工具函数 ══
+const saveLoginState = (name) => {
+  localStorage.setItem('isLogin', 'true')
+  localStorage.setItem('userName', name)
+  localStorage.setItem('justLoggedIn', 'true')
+}
+
+// ══ 清理定时器 ══
+onUnmounted(() => {
+  clearInterval(smsT)
+  clearInterval(regT)
+  clearInterval(qrI)
+})
 </script>
 
 <style scoped>

@@ -8,7 +8,7 @@
           <span class="bc-sep">›</span>
           <span @click="$router.push('/search')" class="bc-link">数码电子</span>
           <span class="bc-sep">›</span>
-          <span class="bc-cur">极简无线降噪耳机 Pro</span>
+          <span class="bc-cur">{{  itemDetail?.name }}</span>
         </div>
   
         <!-- ══ 主体：左内容 + 右购买栏 ══ -->
@@ -20,14 +20,14 @@
             <!-- 商品图片区 -->
             <div class="gallery-section">
               <div class="gallery-main">
-                <img :src="mainImg" alt="商品图" class="gallery-img" />
-                <span class="gallery-tag">秒杀</span>
+                <img :src="mainImg" alt="商品图" class="gallery-img" @error="handleImageError" />
+              
               </div>
               <div class="gallery-thumbs">
                 <div v-for="(img, i) in thumbs" :key="i"
                   :class="['thumb', { active: mainImg === img }]"
                   @click="mainImg = img">
-                  <img :src="img" :alt="`图${i+1}`" />
+                  <img :src="img" :alt="`图${i+1}`" @error="handleImageError" />
                 </div>
               </div>
             </div>
@@ -105,7 +105,7 @@
                   </div>
                   <p class="ri-text">{{ rv.text }}</p>
                   <div class="ri-imgs" v-if="rv.imgs && rv.imgs.length">
-                    <img v-for="(img,i) in rv.imgs" :key="i" :src="img" class="ri-img" />
+                    <img v-for="(img,i) in rv.imgs" :key="i" :src="img" class="ri-img" @error="handleImageError" />
                   </div>
                   <div class="ri-tags" v-if="rv.tags && rv.tags.length">
                     <span v-for="t in rv.tags" :key="t" class="ri-tag">{{ t }}</span>
@@ -202,7 +202,7 @@
           <div class="pd-right">
             <div class="buy-card">
               <div class="bc-info">
-                <p class="bc-name">极简无线降噪耳机 Pro · 2026旗舰版</p>
+                <p class="bc-name">{{  itemDetail?.name }}</p>
                 <p class="bc-brand">云梦精选 · 官方正品</p>
                 <div class="bc-rating">
                   <span class="bc-stars">★★★★★</span>
@@ -265,10 +265,11 @@
                 <div class="spec-group">
                   <div class="sg-label">数量：</div>
                   <div class="qty-ctrl">
-                    <button class="qty-btn" @click="qty>1 && qty--" :disabled="qty<=1">−</button>
-                    <span class="qty-num">{{ qty }}</span>
-                    <button class="qty-btn" @click="qty<99 && qty++" :disabled="qty>=99">+</button>
-                    <span class="qty-stock">库存 {{ currentStock }} 件</span>
+          
+<button class="qty-btn" @click="qty>1 && qty--" :disabled="qty<=1">−</button>
+<span class="qty-num">{{ qty }}</span>
+<button class="qty-btn" @click="qty < currentStock && qty++" :disabled="qty >= currentStock">+</button>
+<span class="qty-stock">库存 {{ currentStock }} 件</span>
                   </div>
                 </div>
               </div>
@@ -340,84 +341,194 @@
       </div>
     </div>
   </template>
-  
   <script setup>
-  import { ref, computed } from 'vue'
-  import { useRouter } from 'vue-router'
+  import { ref, computed, onMounted } from 'vue'
+  import { useRouter, useRoute } from 'vue-router'
+  import request from '@/utils/request'
+  import { addToCart as addCartItemApi } from '@/api/cart' 
+  import { ElMessage } from 'element-plus' 
+  import nofoundImage from '@/assets/images/nofound.png'
+  
   const router = useRouter()
+  const route  = useRoute()
   
-  const mainImg = ref('https://picsum.photos/600/600?random=1')
-  const thumbs  = ref([
-    'https://picsum.photos/600/600?random=1',
-    'https://picsum.photos/600/600?random=2',
-    'https://picsum.photos/600/600?random=3',
-    'https://picsum.photos/600/600?random=4',
-  ])
+  // 图片加载失败处理
+  const handleImageError = (e) => {
+    e.target.src = nofoundImage
+  }
   
-  const selectedColor   = ref('星空黑')
-  const selectedVersion = ref('标准版')
-  const selectedBundle  = ref('单品')
-  const qty             = ref(1)
+  // ─── 加载状态 ────────────────────────────────────────────────
+  const loading = ref(true)
   
-  const colors = ref([
-    { name:'星空黑', hex:'#1A1A18', stock:true,  priceDiff: 0  },
-    { name:'月光白', hex:'#F5F2EC', stock:true,  priceDiff: 0  },
-    { name:'玫瑰金', hex:'#C9A84C', stock:true,  priceDiff: 10 },
-    { name:'深海蓝', hex:'#2C5F8A', stock:false, priceDiff: 0  },
-  ])
-  const versions = ref([
-    { name:'标准版', priceDiff: 0,   stock: 128 },
-    { name:'豪华版', priceDiff: 100, stock: 56  },
-    { name:'限定版', priceDiff: 200, stock: 12  },
-  ])
-  const bundles = ref([
-    { name:'单品',       desc:'耳机×1',                         price: 89  },
-    { name:'耳机+收纳盒', desc:'耳机×1 + 皮质收纳盒×1',           price: 118 },
-    { name:'耳机+充电套', desc:'耳机×1 + 快充线×1 + 耳机套×3',    price: 128 },
-  ])
+  // ─── 后端数据 ────────────────────────────────────────────────
+  const itemDetail  = ref(null)
+  const skuList     = ref([])
+  const specGroups  = ref([])
+  const quickParams = ref([])
+  const specDetails = ref([])
   
-  const basePrice     = 89
-  const baseOrigPrice = 199
-  const currentPrice  = computed(() => {
-    const b = bundles.value.find(b => b.name === selectedBundle.value)
-    if (b && b.name !== '单品') return b.price
-    const v = versions.value.find(v => v.name === selectedVersion.value)
-    const c = colors.value.find(c => c.name === selectedColor.value)
-    return basePrice + (v?.priceDiff || 0) + (c?.priceDiff || 0)
+  // ─── 图片 ────────────────────────────────────────────────────
+  const mainImg = ref('')
+  const thumbs  = ref([])
+  
+  // ─── 规格选中状态 ────────────────────────────────────────────
+  const selectedSpecs = ref({})  // { 颜色: '黑色', 存储: '128G' }
+  const qty = ref(1)
+  
+  // ─── 颜色名 → hex 映射 ───────────────────────────────────────
+  const colorHexMap = {
+    '星空黑': '#1A1A18', '曜石黑': '#1A1A18', '黑色': '#1A1A18',
+    '月光白': '#F5F2EC', '白色':   '#F5F2EC',
+    '玫瑰金': '#C9A84C', '金色':   '#C9A84C',
+    '深海蓝': '#2C5F8A', '蓝色':   '#2C5F8A',
+    '红色':   '#C0392B', '绿色':   '#27AE60',
+  }
+  
+  // ─── 当前匹配 SKU ────────────────────────────────────────────
+  const currentSku = computed(() =>
+    skuList.value.find(sku =>
+      Object.entries(selectedSpecs.value).every(([k, v]) => sku.specData[k] === v)
+    ) || null
+  )
+  
+  // ─── 价格（单位：分 → 元）────────────────────────────────────
+  const currentPrice = computed(() => {
+    const raw = currentSku.value?.price ?? itemDetail.value?.price ?? 0
+    return (raw / 100).toFixed(2)
   })
   const currentOrigPrice = computed(() => {
-    const v = versions.value.find(v => v.name === selectedVersion.value)
-    return v?.name === '标准版' ? baseOrigPrice : null
+    const raw = itemDetail.value?.originalPrice
+    return raw ? (raw / 100).toFixed(2) : null
   })
-  const currentStock = computed(() => versions.value.find(v => v.name === selectedVersion.value)?.stock || 0)
+  const currentStock = computed(() => currentSku.value?.stock ?? 0)
   
-  const selectColor   = (c) => { selectedColor.value = c.name }
-  const selectVersion = (v) => { selectedVersion.value = v.name }
-  const selectBundle  = (b) => { selectedBundle.value = b.name }
-  const addToCart = () => { alert(`已加入购物车：${selectedColor.value} ${selectedVersion.value} ×${qty.value}`) }
-  const buyNow    = () => { router.push('/cart') }
+  // ─── 兼容旧模板的 computed（颜色/版本/套餐）────────────────
+  const selectedColor   = computed(() => selectedSpecs.value['颜色'] || '')
+  const selectedVersion = computed(() => selectedSpecs.value['存储'] || selectedSpecs.value['版本'] || '')
+  const selectedBundle  = ref('单品')
   
-  const quickParams = [
-    { key:'驱动单元', val:'40mm 钛合金振膜'        },
-    { key:'频响范围', val:'20Hz - 20kHz'            },
-    { key:'降噪深度', val:'最高 35dB ANC'           },
-    { key:'续航时间', val:'单次 30h / 总计 90h'     },
-    { key:'充电方式', val:'USB-C 快充 / Qi 无线'    },
-    { key:'连接协议', val:'蓝牙 5.3 / aptX HD'      },
-    { key:'麦克风',   val:'6麦克风阵列通话降噪'     },
-    { key:'重量',     val:'耳机 280g / 充电盒 62g'  },
-    { key:'防水等级', val:'IPX4 防泼溅'             },
-    { key:'折叠方式', val:'可折叠 · 附收纳袋'       },
-  ]
-  const specDetails = [
-    { key:'品牌',     val:'云梦精选 YUNMENG'             },
-    { key:'型号',     val:'YM-NC100 Pro'                 },
-    { key:'适用场景', val:'通勤 / 差旅 / 居家 / 运动'    },
-    { key:'产地',     val:'中国'                         },
-    { key:'发货',     val:'北京仓，付款后24小时内发货'   },
-    { key:'保修',     val:'1年全保 + 终身免费维修咨询'   },
-  ]
+  const colors = computed(() => {
+    const g = specGroups.value.find(g => g.specName === '颜色')
+    return g ? g.values.map(v => ({
+      name: v.value,
+      hex:  colorHexMap[v.value] || '#888888',
+      stock: v.stock,
+      priceDiff: 0,
+    })) : []
+  })
+  const versions = computed(() => {
+    const g = specGroups.value.find(g => g.specName === '存储' || g.specName === '版本')
+    return g ? g.values.map(v => ({
+      name: v.value,
+      stock: v.stock ? 99 : 0,
+      priceDiff: 0,
+    })) : []
+  })
+  const bundles = ref([
+    { name: '单品', desc: '商品×1', price: 0 },
+  ])
   
+  // ─── 规格选择 ────────────────────────────────────────────────
+  const isSpecAvailable = (specName, value) => {
+    const testSpecs = { ...selectedSpecs.value, [specName]: value }
+    return skuList.value.some(sku =>
+      Object.entries(testSpecs).every(([k, v]) => sku.specData[k] === v) && sku.stock > 0
+    )
+  }
+  
+  const selectSpec = (specName, value) => {
+    if (!isSpecAvailable(specName, value)) return
+    selectedSpecs.value = { ...selectedSpecs.value, [specName]: value }
+    if (currentSku.value?.image) mainImg.value = currentSku.value.image
+  }
+  
+  // 兼容旧模板调用
+  const selectColor   = (c) => selectSpec('颜色', c.name)
+  const selectVersion = (v) => {
+    const key = specGroups.value.find(g => g.specName === '存储') ? '存储' : '版本'
+    selectSpec(key, v.name)
+  }
+  const selectBundle = (b) => { selectedBundle.value = b.name }
+  
+  // ─── 拉取商品详情 ────────────────────────────────────────────
+  const fetchItemDetail = async (id) => {
+    loading.value = true
+    try {
+      // request 响应拦截器已返回 res.data，所以这里直接拿
+      const res = await request.get(`/it/items/${id}`)
+      const d = res.data ?? res  // 兼容后端是否有 { code, data } 包装
+  
+      itemDetail.value  = d
+      skuList.value     = d.skus        || []
+      specGroups.value  = d.specs       || []
+      quickParams.value = d.quickParams || []
+      specDetails.value = d.specDetails || []
+  
+      // 图片
+      mainImg.value = d.mainImage || ''
+      thumbs.value  = d.images?.length ? d.images : (d.mainImage ? [d.mainImage] : [])
+  
+      // 初始化规格：每组取第一个有库存的值
+      const initSpecs = {}
+      for (const group of (d.specs || [])) {
+        const first = group.values.find(v => v.stock)
+        if (first) initSpecs[group.specName] = first.value
+      }
+      selectedSpecs.value = initSpecs
+  
+    } catch (e) {
+      console.error('加载商品详情失败', e)
+    } finally {
+      loading.value = false
+    }
+  }
+  
+  onMounted(() => {
+    const id = route.params.id || route.query.id
+    if (id) fetchItemDetail(id)
+  })
+  
+  // ─── 加入购物车 / 立即购买 ───────────────────────────────────
+  const addToCart = async () => {
+    if (!currentSku.value) { 
+      ElMessage.warning('请先选择完整的商品规格') // 或者保留你原来的 alert('请选择完整规格')
+      return 
+    }
+    
+    try {
+      // 👇 使用封装好的 API，并修正参数名为 quantity (匹配后端 CartDTO)
+      await addCartItemApi({ 
+        skuId: currentSku.value.id, 
+        quantity: qty.value 
+      })
+      
+      const specText = Object.values(selectedSpecs.value).join(' ')
+      ElMessage.success(`已加入购物车`)
+      
+    } catch (e) {
+      console.error('加入购物车失败:', e)
+      ElMessage.error('加入购物车失败，请重试')
+    }
+  }
+  
+  const buyNow = () => {
+    if (!currentSku.value) { 
+      ElMessage.warning('请先选择完整的商品规格')
+      return 
+    }
+    // 立即购买跳转到结算页（或购物车）
+    router.push({ 
+      path: '/cart', 
+      query: { 
+        skuId: currentSku.value.id, 
+        quantity: qty.value, // 把 num 改为 quantity 保持统一
+        direct: 1 
+      } 
+    })
+  }
+
+  
+  // ─── 评论（静态，后续可接接口）──────────────────────────────
   const reviewFilter    = ref('all')
   const activeReviewTag = ref('')
   const onlyWithImg     = ref(false)
@@ -466,7 +577,7 @@
   const submitReview = () => {
     if (!myReview.value.trim() || !myRating.value) return
     reviews.value.unshift({
-      id: Date.now(), name:'我', sku:`${selectedColor.value} / ${selectedVersion.value}`,
+      id: Date.now(), name:'我', sku: Object.values(selectedSpecs.value).join(' / '),
       rating: myRating.value, date: new Date().toLocaleDateString('zh-CN'),
       text: myReview.value, imgs:[], tags:[], likes:0, liked:false, shopReply:'',
     })
@@ -474,6 +585,7 @@
     alert('评价发布成功！')
   }
   
+  // ─── 问答（静态，后续可接接口）──────────────────────────────
   const myQuestion = ref('')
   const isAnon     = ref(false)
   const qaList     = ref([
