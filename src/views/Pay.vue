@@ -329,13 +329,15 @@ const loadPayData = async () => {
     const orderId = route.query.orderId
     
     if (!orderId) {
-      ElMessage.warning('订单ID缺失，请从购物车重新结算')
+      ElMessage.warning('订单ID缺失,请从购物车重新结算')
       router.push('/cart')
       return
     }
 
     // 从后端获取订单详情
     const res = await getOrderDetail(orderId)
+    
+    // 后端返回 Result<Order>,经过拦截器后 res 就是 Order 对象
     const orderData = res.data || res
     
     if (!orderData) {
@@ -344,26 +346,50 @@ const loadPayData = async () => {
       return
     }
 
-    // 填充订单数据
+    console.log('订单详情原始数据:', orderData)
+
+    // 填充订单数据 - 根据后端 Order 对象结构映射
+    // 注意: Order 对象不包含 items,需要从其他途径获取
     payData.value = {
-      orderId: orderData.id,
-      orderNo: orderData.orderNo || orderData.orderNo,
-      items: orderData.items || orderData.orderItems || [],
-      subtotal: orderData.subtotal || orderData.totalPrice || 0,
-      couponDiscount: orderData.couponDiscount || 0,
-      shippingFee: orderData.shippingFee || orderData.freight || 0,
-      totalAmount: orderData.totalAmount || orderData.payAmount || 0,
-      deliveryType: orderData.deliveryType || '标准快递'
+      orderId: orderData.id,                    // 订单ID(订单号)
+      orderNo: orderData.id,                    // 订单号
+      items: orderData.items || [],             // 订单项列表(如果后端有联表查询)
+      subtotal: orderData.totalAmount || 0,     // 订单总金额(分)
+      couponDiscount: orderData.discountAmount || 0,  // 优惠金额(分)
+      shippingFee: 0,                           // 运费(后端暂无此字段)
+      totalAmount: orderData.payAmount || orderData.totalAmount || 0,  // 实付金额(分)
+      deliveryType: '标准快递'                  // 配送方式(前端默认)
     }
 
-    console.log('订单详情:', payData.value)
+    // 金额单位转换: 分 → 元
+    // 后端所有金额字段单位都是分(Long),需要转换为元供前端显示
+    if (payData.value.subtotal > 0) {
+      payData.value.subtotal = payData.value.subtotal / 100
+      payData.value.couponDiscount = payData.value.couponDiscount / 100
+      payData.value.shippingFee = payData.value.shippingFee / 100
+      payData.value.totalAmount = payData.value.totalAmount / 100
+    }
+
+    // 订单项价格转换: 分 → 元
+    if (payData.value.items && payData.value.items.length > 0) {
+      payData.value.items.forEach(item => {
+        if (item.price && typeof item.price === 'number') {
+          // 将单价从分转换为元
+          item.price = parseFloat((item.price / 100).toFixed(2))
+        }
+      })
+    }
+
+    console.log('订单详情(转换后):', payData.value)
+    console.log('订单状态:', orderData.status)
+    console.log('创建时间:', orderData.createTime)
 
     // 加载用户地址列表
     await loadAddresses()
 
   } catch (err) {
     console.error('加载订单数据失败:', err)
-    ElMessage.error('加载订单数据失败')
+    ElMessage.error('加载订单数据失败,请重试')
     router.push('/cart')
   } finally {
     loading.value = false
@@ -506,7 +532,7 @@ const handlePay = async () => {
 
   // 验证订单
   if (!payData.value.orderId) {
-    ElMessage.error('订单信息缺失，请重新下单')
+    ElMessage.error('订单信息缺失,请重新下单')
     return
   }
 
@@ -520,14 +546,15 @@ const handlePay = async () => {
       'bank': 'BANK_CARD'
     }
 
-    // 构造支付请求参数（JSON格式）
+    // 构造支付请求参数
+    // 注意:后端 PayDTO 需要金额单位是分
     const payDTO = {
-      orderId: payData.value.orderId,              // 订单ID（后端用这个创建订单或查找订单）
+      orderId: payData.value.orderId,              // 订单ID
       payChannel: payChannelMap[selectedMethod.value] || 'WECHAT',  // 支付渠道
-      amount: Math.round(payData.value.totalAmount * 100),  // 金额，单位：分
+      amount: Math.round(payData.value.totalAmount * 100),  // 金额,单位:分
       addressId: selectedAddressId.value,          // 收货地址ID
       note: orderNote.value || '',                 // 订单备注
-      couponId: null                               // 优惠券ID（如果有）
+      couponId: null                               // 优惠券ID(如果有)
     }
 
     console.log('支付请求参数:', payDTO)
@@ -548,7 +575,7 @@ const handlePay = async () => {
     console.error('支付失败详情:', err)
     
     // 详细的错误提示
-    let errorMsg = '支付失败，请重试'
+    let errorMsg = '支付失败,请重试'
     
     if (err.response) {
       const status = err.response.status
@@ -557,32 +584,32 @@ const handlePay = async () => {
       switch (status) {
         case 400:
           // 请求参数错误
-          errorMsg = data.message || data.msg || '请求参数错误，请检查订单信息'
+          errorMsg = data.message || data.msg || '请求参数错误,请检查订单信息'
           if (data.errors) {
-            // 如果有具体的字段错误，显示出来
-            errorMsg = Object.values(data.errors).join('；')
+            // 如果有具体的字段错误,显示出来
+            errorMsg = Object.values(data.errors).join(';')
           }
           break
         case 401:
-          errorMsg = '登录已过期，请重新登录后再支付'
+          errorMsg = '登录已过期,请重新登录后再支付'
           break
         case 403:
           errorMsg = '没有权限进行支付操作'
           break
         case 404:
-          errorMsg = '订单不存在，请检查订单信息'
+          errorMsg = '订单不存在,请检查订单信息'
           break
         case 500:
-          errorMsg = data.message || data.msg || '服务器错误，请稍后重试'
+          errorMsg = data.message || data.msg || '服务器错误,请稍后重试'
           break
         default:
-          errorMsg = data.message || data.msg || `支付失败（错误码：${status}）`
+          errorMsg = data.message || data.msg || `支付失败(错误码:${status})`
       }
     } else if (err.message) {
       if (err.message.includes('timeout')) {
-        errorMsg = '支付请求超时，请检查网络连接后重试'
+        errorMsg = '支付请求超时,请检查网络连接后重试'
       } else if (err.message.includes('Network Error')) {
-        errorMsg = '网络连接失败，请检查网络后重试'
+        errorMsg = '网络连接失败,请检查网络后重试'
       } else {
         errorMsg = err.message
       }

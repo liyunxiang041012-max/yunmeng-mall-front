@@ -461,9 +461,9 @@ const checkout = async () => {
     const changedItems = selectedItems.value.filter(item => item.priceChanged)
     
     if (changedItems.length > 0) {
-      // 有价格变动，弹窗让用户确认
+      // 有价格变动,弹窗让用户确认
       let message = '<div style="text-align: left;">'
-      message += '<p style="margin-bottom: 12px; color: #E74C3C; font-weight: 500;">以下商品价格已更新：</p>'
+      message += '<p style="margin-bottom: 12px; color: #E74C3C; font-weight: 500;">以下商品价格已更新:</p>'
       message += '<div style="background: #F8F9FA; padding: 12px; border-radius: 8px; margin-bottom: 12px;">'
       
       changedItems.forEach(item => {
@@ -474,7 +474,7 @@ const checkout = async () => {
         message += `<div style="margin: 8px 0; padding: 8px; background: #FFF; border-radius: 6px;">`
         message += `<p style="margin: 0 0 4px 0; font-size: 13px; font-weight: 500;">• ${item.name}</p>`
         message += `<p style="margin: 0; font-size: 12px; color: #8A8070;">`
-        message += `原价：￥${item.snapshotPrice.toFixed(2)} → 新价：￥${item.newPrice.toFixed(2)} `
+        message += `原价:￥${item.snapshotPrice.toFixed(2)} → 新价:￥${item.newPrice.toFixed(2)} `
         message += `<span style="color: ${changeColor}; font-weight: 500;">(${changeText})</span>`
         message += `</p>`
         message += `</div>`
@@ -495,23 +495,18 @@ const checkout = async () => {
         }
       )
       
-      // 用户确认后，清除价格变动标记
+      // 用户确认后,清除价格变动标记
       changedItems.forEach(item => {
         item.priceChanged = false
       })
     }
     
-    // 构造创建订单的参数
+    // 构造创建订单的参数 - 严格按照后端 OrderDTO 格式
     const orderDTO = {
-      // 选中的商品 SKU ID 和数量
       items: selectedItems.value.map(item => ({
         skuId: item.skuId,
         quantity: item.qty
-      })),
-      // 优惠券ID（如果有）
-      couponId: appliedCoupon.value?.id || null,
-      // 订单备注
-      note: ''
+      }))
     }
 
     console.log('创建订单参数:', orderDTO)
@@ -519,15 +514,17 @@ const checkout = async () => {
     // 调用后端创建订单接口
     const res = await createOrder(orderDTO)
     
-    // 后端直接返回订单ID字符串（Result<String>）
+    // 后端返回 Result<String>,经过拦截器后 res 就是订单ID字符串
     const orderId = res.data || res
     
     if (!orderId) {
-      ElMessage.error('订单创建失败，请重试')
+      ElMessage.error('订单创建失败,请重试')
       return
     }
 
-    // 跳转到支付页面，只传订单ID
+    console.log('订单创建成功,订单ID:', orderId)
+
+    // 跳转到支付页面,只传订单ID
     router.push({
       path: '/pay',
       query: { orderId }
@@ -536,10 +533,10 @@ const checkout = async () => {
   } catch (err) {
     // 用户取消或请求失败
     if (err === 'cancel' || err === 'close') {
-      return // 用户取消，不显示错误
+      return // 用户取消,不显示错误
     }
     console.error('创建订单失败:', err)
-    const errorMsg = err.response?.data?.message || err.response?.data?.msg || '订单创建失败，请重试'
+    const errorMsg = err.response?.data?.message || err.response?.data?.msg || err.message || '订单创建失败,请重试'
     ElMessage.error(errorMsg)
   }
 }
