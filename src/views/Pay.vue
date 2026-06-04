@@ -12,7 +12,20 @@
           </button>
           <h1 class="ph-title">确认支付</h1>
         </div>
-        <span class="ph-order">订单号: {{ payData.orderNo }}</span>
+        <div class="ph-right">
+          <span class="ph-order">订单号: {{ payData.orderNo }}</span>
+          <span v-if="countdown && !orderExpired" class="ph-countdown">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            剩余 {{ countdown }}
+          </span>
+        </div>
+      </div>
+
+      <!-- ══ 订单已过期 ══ -->
+      <div v-if="orderExpired" class="expired-banner">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        订单已超时自动取消，请重新下单
+        <button class="expired-back-btn" @click="$router.push('/cart')">返回购物车</button>
       </div>
 
       <!-- ══ 加载中 ══ -->
@@ -211,8 +224,9 @@
               </div>
             </div>
 
-            <button class="pay-btn" @click="handlePay" :disabled="!selectedMethod || paying">
-              <span v-if="paying">支付中...</span>
+            <button class="pay-btn" @click="handlePay" :disabled="!selectedMethod || paying || orderExpired">
+              <span v-if="orderExpired">订单已过期</span>
+              <span v-else-if="paying">支付中...</span>
               <span v-else>确认支付 ¥{{ payData.totalAmount?.toFixed(2) || '0.00' }}</span>
             </button>
             
@@ -269,12 +283,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { createPay } from '@/api/pay'
+import { createPay, payCallback } from '@/api/pay'
 import { getMyAddresses, addAddress } from '@/api/user'
-import { getOrderDetail } from '@/api/order'
+import { getOrderDetail, getOrderItems } from '@/api/order'
 import nofoundImage from '@/assets/images/nofound.png'
 
 const router = useRouter()
@@ -320,6 +334,58 @@ const guarantees = [
   { icon: '💬', label: '在线客服' },
 ]
 
+// ================= 30分钟超时倒计时 =================
+const countdown = ref('')
+const orderExpired = ref(false)
+let countdownTimer = null
+let statusPollTimer = null
+
+const startCountdown = (createTime) => {
+  if (!createTime) return
+  const createDate = new Date(createTime.replace(/-/g, '/'))
+  if (isNaN(createDate.getTime())) return
+
+  const deadline = new Date(createDate.getTime() + 30 * 60 * 1000) // 30分钟
+
+  const tick = () => {
+    const now = Date.now()
+    const remaining = deadline - now
+    if (remaining <= 0) {
+      countdown.value = '00:00'
+      orderExpired.value = true
+      stopTimers()
+      return
+    }
+    const m = Math.floor(remaining / 60000)
+    const s = Math.floor((remaining % 60000) / 1000)
+    countdown.value = `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+  }
+
+  tick()
+  countdownTimer = setInterval(tick, 1000)
+}
+
+const pollOrderStatus = async (orderId) => {
+  statusPollTimer = setInterval(async () => {
+    try {
+      const res = await getOrderDetail(orderId)
+      const data = res?.data ?? res
+      const status = data?.status
+      // status=4 表示 CANCELLED（已取消）
+      if (status === 4 || status === 'CANCELLED') {
+        orderExpired.value = true
+        stopTimers()
+        ElMessage.warning('订单已超时自动取消')
+      }
+    } catch { /* 轮询失败静默 */ }
+  }, 10000) // 每10秒轮询一次
+}
+
+const stopTimers = () => {
+  if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null }
+  if (statusPollTimer) { clearInterval(statusPollTimer); statusPollTimer = null }
+}
+
 // ================= 数据加载 =================
 const loadPayData = async () => {
   try {
@@ -334,58 +400,62 @@ const loadPayData = async () => {
       return
     }
 
-    // 从后端获取订单详情
-    const res = await getOrderDetail(orderId)
+    // 从后端获取订单详情和订单明细（商品列表）
+    const [orderRes, itemsRes] = await Promise.all([
+      getOrderDetail(orderId),
+      getOrderItems(orderId)
+    ])
     
-    // 后端返回 Result<Order>,经过拦截器后 res 就是 Order 对象
-    const orderData = res.data || res
+    // 后端返回 Result 格式,拦截器已解包一层
+    const orderData = orderRes.data || {}
+    const itemsData = itemsRes.data || []
     
-    if (!orderData) {
-      ElMessage.error('订单不存在')
+    // 优先用后端返回的金额,没有就从明细计算
+    let calculatedTotalAmount = 0
+    if (Array.isArray(itemsData) && itemsData.length > 0) {
+      calculatedTotalAmount = itemsData.reduce((sum, item) => {
+        return sum + (item.price || 0) * (item.quantity || 0)
+      }, 0)
+    }
+    
+    const totalAmountFen = orderData.totalAmount ?? calculatedTotalAmount
+    const payAmountFen = orderData.payAmount ?? orderData.totalAmount ?? calculatedTotalAmount
+    const discountAmountFen = orderData.discountAmount ?? 0
+    
+    if (!orderRes.data && calculatedTotalAmount === 0) {
+      ElMessage.error('订单数据不完整,请联系客服')
       router.push('/cart')
       return
     }
 
-    console.log('订单详情原始数据:', orderData)
-
-    // 填充订单数据 - 根据后端 Order 对象结构映射
-    // 注意: Order 对象不包含 items,需要从其他途径获取
+    // 填充订单数据
     payData.value = {
-      orderId: orderData.id,                    // 订单ID(订单号)
-      orderNo: orderData.id,                    // 订单号
-      items: orderData.items || [],             // 订单项列表(如果后端有联表查询)
-      subtotal: orderData.totalAmount || 0,     // 订单总金额(分)
-      couponDiscount: orderData.discountAmount || 0,  // 优惠金额(分)
-      shippingFee: 0,                           // 运费(后端暂无此字段)
-      totalAmount: orderData.payAmount || orderData.totalAmount || 0,  // 实付金额(分)
-      deliveryType: '标准快递'                  // 配送方式(前端默认)
-    }
-
-    // 金额单位转换: 分 → 元
-    // 后端所有金额字段单位都是分(Long),需要转换为元供前端显示
-    if (payData.value.subtotal > 0) {
-      payData.value.subtotal = payData.value.subtotal / 100
-      payData.value.couponDiscount = payData.value.couponDiscount / 100
-      payData.value.shippingFee = payData.value.shippingFee / 100
-      payData.value.totalAmount = payData.value.totalAmount / 100
+      orderId: orderData.id || orderId,       // 订单ID,后端没返回就用路由的
+      orderNo: orderData.id || orderId,       // 订单号
+      items: Array.isArray(itemsData) ? itemsData : [],
+      subtotal: totalAmountFen / 100,         // 分 → 元
+      couponDiscount: discountAmountFen / 100,
+      shippingFee: 0,
+      totalAmount: payAmountFen / 100,        // 分 → 元
+      deliveryType: '标准快递'
     }
 
     // 订单项价格转换: 分 → 元
-    if (payData.value.items && payData.value.items.length > 0) {
+    if (payData.value.items.length > 0) {
       payData.value.items.forEach(item => {
         if (item.price && typeof item.price === 'number') {
-          // 将单价从分转换为元
           item.price = parseFloat((item.price / 100).toFixed(2))
         }
       })
     }
 
-    console.log('订单详情(转换后):', payData.value)
-    console.log('订单状态:', orderData.status)
-    console.log('创建时间:', orderData.createTime)
-
     // 加载用户地址列表
     await loadAddresses()
+
+    // 启动30分钟倒计时
+    startCountdown(orderData.createTime)
+    // 每10秒轮询订单状态（检测超时取消）
+    pollOrderStatus(orderId)
 
   } catch (err) {
     console.error('加载订单数据失败:', err)
@@ -564,9 +634,51 @@ const handlePay = async () => {
     
     console.log('支付接口返回:', res)
     
+    // 检查后端业务状态码（响应拦截器已解包 res.data，res 就是后端 Result 对象）
+    // 后端可能返回 {code, data, msg} 或直接返回数据
+    if (res && typeof res === 'object' && 'code' in res) {
+      // 后端返回了 Result 包装格式
+      if (res.code !== 200 && res.code !== 0 && res.code !== '200') {
+        // 业务失败
+        const errMsg = res.msg || res.message || '支付创建失败'
+        ElMessage.error(errMsg)
+        return
+      }
+    }
+    
+    // 从响应中提取 payNo（后端可能返回 payNo、id 或完整支付对象）
+    const payResult = (res && typeof res === 'object' && 'data' in res) ? res.data : res
+    const payNo = payResult?.payNo || payResult?.id || payResult
+    
+    if (!payNo) {
+      ElMessage.error('支付单号缺失，无法完成回调')
+      return
+    }
+    
+    console.log('开始调用支付回调，payNo:', payNo)
+    
+    // 调用支付成功回调接口，通知后端更新订单状态
+    try {
+      const cbRes = await payCallback(payNo)
+      console.log('支付回调返回:', cbRes)
+      
+      // 回调也可能返回 Result 包装
+      if (cbRes && typeof cbRes === 'object' && 'code' in cbRes) {
+        if (cbRes.code !== 200 && cbRes.code !== 0 && cbRes.code !== '200') {
+          const errMsg = cbRes.msg || cbRes.message || '支付回调失败，请联系客服'
+          ElMessage.warning(errMsg)
+          return
+        }
+      }
+    } catch (cbErr) {
+      console.error('支付回调接口失败:', cbErr)
+      ElMessage.warning('支付回调失败，订单状态可能未更新，请联系客服')
+      // 回调失败也继续跳转，不阻断用户流程
+    }
+    
     ElMessage.success('支付成功')
     
-    // 跳转到订单详情页或首页
+    // 跳转到首页
     setTimeout(() => {
       router.push('/home')
     }, 1500)
@@ -622,6 +734,7 @@ const handlePay = async () => {
 }
 
 onMounted(() => loadPayData())
+onUnmounted(() => stopTimers())
 </script>
 
 <style scoped>
@@ -657,6 +770,31 @@ onMounted(() => loadPayData())
 .ph-back:hover { border-color: #C9A84C; color: #A07830; background: rgba(201,168,76,0.05); }
 .ph-title { font-size: 24px; font-weight: 500; color: #1A1A18; letter-spacing: -0.3px; }
 .ph-order { font-size: 13px; color: #8A8070; font-family: 'Space Mono', monospace; }
+.ph-right { display: flex; align-items: center; gap: 16px; }
+.ph-countdown {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 13px; color: #B8444A; font-weight: 500;
+  font-family: 'Space Mono', monospace;
+  background: rgba(184,68,74,0.06);
+  padding: 4px 10px; border-radius: 6px;
+}
+
+/* ══ 过期提示 ══ */
+.expired-banner {
+  display: flex; align-items: center; gap: 10px;
+  padding: 16px 20px; margin-bottom: 24px;
+  background: rgba(184,68,74,0.08);
+  border: 1px solid rgba(184,68,74,0.2);
+  border-radius: 12px;
+  font-size: 14px; color: #B8444A;
+}
+.expired-back-btn {
+  margin-left: auto; padding: 6px 16px;
+  background: #B8444A; color: #FFF; border: none;
+  border-radius: 8px; font-size: 13px; cursor: pointer;
+  font-family: inherit;
+}
+.expired-back-btn:hover { background: #9B3539; }
 
 /* ══ 加载中 ══ */
 .pay-loading {

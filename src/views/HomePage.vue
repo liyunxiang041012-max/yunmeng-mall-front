@@ -1,5 +1,4 @@
 <template>
-  <title>首页</title>
   <div class="app-root">
 
     <!-- ══ SPLASH（只有登录后才显示）══ -->
@@ -27,10 +26,10 @@
     </Transition>
 
     <!-- ══ MAIN ══ -->
-    <div class="yunmeng" :class="{ ready: !showSplash || !justLoggedIn }">
+    <div class="yunmeng" :class="{ ready: !showSplash || !justLoggedIn }" ref="mainRef">
 
       <!-- ══ NAV ══ -->
-      <header class="site-nav">
+      <header class="site-nav" ref="navRef">
         <div class="nav-inner">
           <div class="nav-brand" @click="$router.push('/home')">
             <svg viewBox="0 0 40 40" width="32" height="32" fill="none">
@@ -96,7 +95,7 @@
       <main class="site-main">
 
         <!-- ══ HERO ══ -->
-        <section class="hero">
+        <section class="hero" ref="heroRef">
           <div class="hero-inner">
             <transition name="hero-fade" mode="out-in">
               <div :key="currentBanner" class="hero-slide">
@@ -127,8 +126,8 @@
         </section>
 
         <!-- ══ 服务承诺 ══ -->
-        <section class="service-bar">
-          <div v-for="s in services" :key="s.id" class="service-item">
+        <section class="service-bar" ref="serviceBarRef">
+          <div v-for="s in services" :key="s.id" class="service-item gsap-service-item">
             <span class="service-icon">{{ s.icon }}</span>
             <div>
               <strong>{{ s.name }}</strong>
@@ -147,10 +146,10 @@
               <p class="eyebrow">COUPONS</p>
               <h2 class="section-title">专属优惠券</h2>
             </div>
-            <button class="ghost-btn">查看全部 →</button>
+            <button class="ghost-btn" @click="$router.push('/coupon')">查看全部 →</button>
           </div>
-          <div class="coupon-list">
-            <div v-for="cp in coupons" :key="cp.id" class="coupon-card" :class="{ claimed: cp.claimed }">
+          <div class="coupon-list" ref="couponListRef">
+            <div v-for="cp in coupons" :key="cp.id" class="coupon-card gsap-coupon-card" :class="{ claimed: cp.claimed }">
               <div class="cp-left" :style="{'--cc': cp.color}">
                 <div class="cp-amount">
                   <span class="cp-unit">¥</span>
@@ -186,8 +185,8 @@
             </div>
             <button class="ghost-btn">查看全部 →</button>
           </div>
-          <div class="flash-grid">
-            <div v-for="item in seckillGoods" :key="item.id" class="flash-card">
+          <div class="flash-grid" ref="flashGridRef">
+            <div v-for="item in seckillGoods" :key="item.id" class="flash-card gsap-flash-card">
               <div class="flash-img-wrap">
                 <img :src="item.image" :alt="item.name" @error="handleImageError" />
                 <span class="flash-badge">-{{ Math.round((1 - item.currentPrice / item.originalPrice)*100) }}%</span>
@@ -216,7 +215,7 @@
             </div>
           </div>
           <div class="boutique-grid">
-            <div class="boutique-main">
+            <div class="boutique-main gsap-boutique-main" ref="boutiqueMainRef">
               <img src="https://picsum.photos/900/600?random=50" alt="boutique" />
               <div class="boutique-mask">
                 <span class="bt-tag">✦ 2026春季大赏</span>
@@ -225,7 +224,7 @@
               </div>
             </div>
             <div class="boutique-subs">
-              <div class="boutique-sub" v-for="f in featureSubs" :key="f.id">
+              <div class="boutique-sub gsap-boutique-sub" v-for="f in featureSubs" :key="f.id">
                 <img :src="f.image" alt="" @error="handleImageError" />
                 <div class="bs-mask">
                   <span>{{ f.tag }}</span>
@@ -245,8 +244,8 @@
             </div>
             <button class="ghost-btn" @click="refreshRecommend">↺ 换一批</button>
           </div>
-          <div class="rec-grid">
-            <div v-for="item in recommendGoods" :key="item.id" class="rec-card">
+          <div class="rec-grid" ref="recGridRef">
+            <div v-for="item in recommendGoods" :key="item.id" class="rec-card gsap-rec-card">
               <div class="rec-img-wrap">
                 <img :src="item.image" :alt="item.name" @error="handleImageError" />
                 <button class="rec-wish">♡</button>
@@ -268,47 +267,14 @@
       </main>
 
       <!-- AI 悬浮球 -->
-      <div class="ai-orb" @click="toggleAiPanel">
+      <div class="ai-orb" @click="$router.push('/ai')">
         <div class="orb-ring r1"></div>
         <div class="orb-ring r2"></div>
         <div class="orb-core">✦</div>
         <span class="orb-label">AI助手</span>
       </div>
-      <transition name="panel-up">
-  <div v-if="aiPanelOpen" class="ai-panel">
-    <div class="ai-head">
-      <div class="ai-title"><span class="ai-dot"></span>云梦 AI 助手</div>
-      <button @click.stop="aiPanelOpen=false">✕</button>
-    </div>
-    <div class="ai-body" ref="aiBodyRef">
-      <template v-for="(msg, i) in aiMessages" :key="i">
-        <div v-if="msg.role === 'ai'" class="ai-row">
-          <div class="ai-av">✦</div>
-          <div class="ai-bubble">{{ msg.text }}</div>
-        </div>
-        <div v-else class="ai-row ai-row-user">
-          <div class="ai-bubble ai-bubble-user">{{ msg.text }}</div>
-        </div>
-      </template>
-      <div class="ai-chips" v-if="aiMessages.length === 1">
-        <button v-for="q in aiQuickQuestions" :key="q" class="ai-chip" @click="sendQuickQuestion(q)">{{ q }}</button>
-      </div>
-    </div>
-    <div class="ai-input">
-      <input
-        v-model="aiInput"
-        type="text"
-        placeholder="输入你想要的…"
-        @keyup.enter="sendAiMessage"
-      />
-      <button class="ai-send" @click="sendAiMessage">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 2 11 13"/><path d="M22 2 15 22 11 13 2 9l20-7z"/></svg>
-      </button>
-    </div>
-  </div>
-</transition>
 
-      <footer class="site-footer">
+      <footer class="site-footer" ref="footerRef">
         <div class="footer-inner">
           <div class="footer-brand">
             <div class="footer-logo">云梦商城</div>
@@ -331,10 +297,13 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted ,nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import router from '@/router'
 import { userLogout } from '@/api/user'
 import nofoundImage from '@/assets/images/nofound.png'
+import lunbo1 from '@/assets/board/lunbo1.png'
+import lunbo2 from '@/assets/board/lunbo2.png'
+import lunbo3 from '@/assets/board/lunbo3.png'
 
 // 图片加载失败处理
 const handleImageError = (e) => {
@@ -346,44 +315,24 @@ const showSplash     = ref(justLoggedIn)
 const splashPhase    = ref(0)
 const splashProgress = ref(0)
 let splashTimer = null
-// AI 对话
-const aiInput     = ref('')
-const aiMessages  = ref([
-  { role: 'ai', text: '你好！我是云梦 AI，可以帮你选品、比价、搭配穿搭，告诉我你的需求吧 ～' }
-])
-const aiBodyRef = ref(null)
 
-const sendAiMessage = async () => {
-  const text = aiInput.value.trim()
-  if (!text) return
-  aiMessages.value.push({ role: 'user', text })
-  aiInput.value = ''
-  await nextTick()
-  if (aiBodyRef.value) aiBodyRef.value.scrollTop = aiBodyRef.value.scrollHeight
-}
-
-const sendQuickQuestion = (q) => {
-  aiInput.value = q
-  sendAiMessage()
-}
 const runSplash = () => {
   splashPhase.value = 1
-  setTimeout(() => { splashPhase.value = 2 }, 400)
+  const duration = 2200
   const start = Date.now()
-  splashTimer = setInterval(() => {
-    const el = Date.now() - start
-    splashProgress.value = Math.min(100, (el / 2200) * 100)
-    if (splashProgress.value >= 100) {
-      clearInterval(splashTimer)
-      setTimeout(() => { showSplash.value = false }, 300)
+  const timer = setInterval(() => {
+    const elapsed = Date.now() - start
+    splashProgress.value = Math.min(100, (elapsed / duration) * 100)
+    if (elapsed >= duration) {
+      clearInterval(timer)
+      showSplash.value = false
       localStorage.removeItem('justLoggedIn')
     }
-  }, 16)
+  }, 30)
 }
 const skipSplash = () => {
-  clearInterval(splashTimer)
   splashProgress.value = 100
-  setTimeout(() => { showSplash.value = false }, 200)
+  showSplash.value = false
   localStorage.removeItem('justLoggedIn')
 }
 
@@ -391,6 +340,8 @@ const skipSplash = () => {
 const isLogin  = ref(localStorage.getItem('isLogin') === 'true')
 const userName = ref(localStorage.getItem('userName') || '')
 const msgCount = ref(3)
+
+const mainRef = ref(null)
 
 // 头像显示字符：昵称取第一个字，手机号取后4位，都没有显示"我"
 const avatarChar = computed(() => {
@@ -424,7 +375,6 @@ const searchKeyword = ref('')
 const searchFocused = ref(false)
 const cartCount     = ref(5)
 const currentBanner = ref(0)
-const aiPanelOpen   = ref(false)
 const hours         = ref('02')
 const minutes       = ref('45')
 const seconds       = ref('12')
@@ -432,9 +382,9 @@ const seconds       = ref('12')
 const hotTags = ref(['春季新款', 'AI选品', '耳机推荐', '平价好物', '居家神器', '限定礼盒'])
 
 const banners = ref([
-  { id:1, tag:'2026 春季系列', title:'探索全球\n好物世界', sub:'甄选全球顶级生活方式精品，专为品味不凡的你', image:'https://picsum.photos/1400/700?random=10' },
-  { id:2, tag:'智能家居专场', title:'未来感\n生活方式', sub:'AI 帮你打造理想中的家', image:'https://picsum.photos/1400/700?random=11' },
-  { id:3, tag:'数码新品首发', title:'科技与\n美感并行', sub:'2026 最值得入手的数码好物', image:'https://picsum.photos/1400/700?random=12' },
+  { id:1, tag:'2026 春季系列', title:'探索全球\n好物世界', sub:'甄选全球顶级生活方式精品，专为品味不凡的你', image:lunbo1 },
+  { id:2, tag:'智能家居专场', title:'未来感\n生活方式', sub:'AI 帮你打造理想中的家', image:lunbo2 },
+  { id:3, tag:'数码新品首发', title:'科技与\n美感并行', sub:'2026 最值得入手的数码好物', image:lunbo3 },
 ])
 
 const sideCards = ref([
@@ -486,10 +436,7 @@ const recommendGoods = ref([
   { id:8, name:'轻便碳纤维折叠雨伞',       price:45,   sales:'1k+',  image:'https://picsum.photos/400/400?random=27' },
 ])
 
-const aiQuickQuestions = ref(['帮我找平价耳机', '最近流行什么', '推荐家居好物', '查看我的订单'])
-
 const handleSearch     = () => { router.push('/search') }
-const toggleAiPanel    = () => { aiPanelOpen.value = !aiPanelOpen.value }
 const refreshRecommend = () => { recommendGoods.value = [...recommendGoods.value].sort(() => Math.random() - 0.5) }
 
 let countdown = null, bannerTimer = null
@@ -510,12 +457,12 @@ onMounted(() => {
   bannerTimer = setInterval(() => {
     currentBanner.value = (currentBanner.value + 1) % banners.value.length
   }, 5000)
-  // 监听其他标签页退出登录
   window.addEventListener('storage', (e) => {
     if (e.key === 'isLogin') isLogin.value = e.newValue === 'true'
     if (e.key === 'userName') userName.value = e.newValue || ''
-   
   })
+
+
 })
 onUnmounted(() => {
   clearInterval(countdown)
@@ -615,8 +562,8 @@ onUnmounted(() => {
 .hero { display: grid; grid-template-columns: 1fr 240px; gap: 16px; margin-bottom: 32px; }
 .hero-inner { position: relative; height: 480px; border-radius: 20px; overflow: hidden; border: 1px solid #E0D8C8; box-shadow: var(--shadow); }
 .hero-slide { position: absolute; inset: 0; }
-.hero-img { width: 100%; height: 100%; object-fit: cover; filter: brightness(0.82) saturate(0.9); }
-.hero-overlay { position: absolute; inset: 0; background: linear-gradient(115deg, rgba(250,248,240,0.88) 0%, rgba(250,248,240,0.5) 45%, rgba(250,248,240,0.05) 100%); }
+.hero-img { width: 100%; height: 100%; object-fit: cover; }
+.hero-overlay { display: none; }
 .hero-copy { position: relative; z-index: 2; display: flex; flex-direction: column; justify-content: center; padding: 52px 56px; height: 100%; }
 .hero-tag { font-size: 10px; letter-spacing: 4px; color: #A07830; font-weight: 500; margin-bottom: 16px; text-transform: uppercase; display: flex; align-items: center; gap: 10px; }
 .hero-tag::before { content: ''; width: 24px; height: 1px; background: linear-gradient(90deg, transparent, #C9A84C); }
@@ -761,32 +708,6 @@ onUnmounted(() => {
 .ai-orb:hover .orb-core { transform: scale(1.08); box-shadow: 0 6px 28px rgba(160,120,48,0.5); }
 .orb-label { margin-top: 6px; font-size: 10px; color: #8A8070; letter-spacing: 1px; }
 
-/* ══ AI 面板 ══ */
-.ai-panel { position: fixed; bottom: 110px; right: 40px; width: 520px; z-index: 9999; background: #FFF; border: 1px solid #E0D8C8; border-radius: 24px; overflow: hidden; box-shadow: 0 24px 72px rgba(0,0,0,0.18); display: flex; flex-direction: column; }
-.ai-head { display: flex; justify-content: space-between; align-items: center; padding: 18px 22px; border-bottom: 1px solid #F0EAE0; font-size: 14px; font-weight: 500; color: #1A1A18; background: #FAFAF8; flex-shrink: 0; }
-.ai-title { display: flex; align-items: center; gap: 9px; }
-.ai-dot { width: 8px; height: 8px; border-radius: 50%; background: #27AE60; animation: blink 2s infinite; }
-@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
-.ai-head button { background: none; border: none; color: #8A8070; cursor: pointer; font-size: 16px; transition: 0.2s; line-height: 1; padding: 4px 6px; border-radius: 6px; }
-.ai-head button:hover { color: #A07830; background: rgba(160,120,48,0.08); }
-.ai-body { padding: 20px 22px 16px; height: 600px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; scroll-behavior: smooth; }
-.ai-body::-webkit-scrollbar { width: 3px; }
-.ai-body::-webkit-scrollbar-thumb { background: #E0D8C8; border-radius: 10px; }
-.ai-row { display: flex; gap: 12px; align-items: flex-start; }
-.ai-row-user { flex-direction: row-reverse; }
-.ai-av { width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; background: linear-gradient(135deg, #A07830, #C9A84C); color: #FFF; font-size: 13px; display: flex; align-items: center; justify-content: center; }
-.ai-bubble { background: #F5F2EC; border: 1px solid #E0D8C8; border-radius: 12px 12px 12px 3px; padding: 12px 15px; font-size: 13px; line-height: 1.7; color: #4A4438; font-weight: 300; max-width: 380px; }
-.ai-bubble-user { background: linear-gradient(135deg, #A07830, #C9A84C); border-color: transparent; border-radius: 12px 12px 3px 12px; color: #FFF; font-weight: 400; }
-.ai-chips { display: flex; flex-wrap: wrap; gap: 8px; padding-left: 44px; }
-.ai-chip { background: #F5F2EC; border: 1px solid #E0D8C8; color: #4A4438; font-family: inherit; font-size: 12px; padding: 7px 14px; border-radius: 100px; cursor: pointer; transition: 0.2s; }
-.ai-chip:hover { border-color: #C9A84C; color: #A07830; background: rgba(201,168,76,0.08); }
-.ai-input { display: flex; gap: 10px; padding: 14px 18px; border-top: 1px solid #F0EAE0; flex-shrink: 0; background: #FAFAF8; }
-.ai-input input { flex: 1; background: #FFF; border: 1px solid #E0D8C8; border-radius: 100px; padding: 11px 18px; color: #1A1A18; font-family: inherit; font-size: 13px; outline: none; transition: 0.2s; }
-.ai-input input:focus { border-color: #C9A84C; box-shadow: 0 0 0 3px rgba(201,168,76,0.12); }
-.ai-input input::placeholder { color: #B0A898; }
-.ai-send { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #A07830, #C9A84C); border: none; color: #FFF; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; transition: 0.2s; }
-.ai-send:hover { transform: scale(1.08); box-shadow: 0 3px 12px rgba(160,120,48,0.4); }
-
 /* ══ FOOTER ══ */
 .site-footer { border-top: 1px solid #E0D8C8; padding: 56px 40px 32px; background: #FAFAF8; }
 .footer-inner { max-width: 1400px; margin: 0 auto; display: grid; grid-template-columns: 1.5fr 2fr; gap: 80px; margin-bottom: 40px; }
@@ -802,12 +723,113 @@ onUnmounted(() => {
 .footer-bottom a:hover { color: #A07830; }
 
 /* ══ 动画 ══ */
-.hero-fade-enter-active { animation: hIn 0.5s ease forwards; }
-.hero-fade-leave-active { animation: hOut 0.25s ease forwards; }
-@keyframes hIn  { from{opacity:0;transform:translateX(14px)} to{opacity:1;transform:translateX(0)} }
-@keyframes hOut { from{opacity:1} to{opacity:0;transform:translateX(-10px)} }
-.panel-up-enter-active, .panel-up-leave-active { transition: all 0.3s cubic-bezier(.175,.885,.32,1.275); }
-.panel-up-enter-from, .panel-up-leave-to { opacity: 0; transform: translateY(12px) scale(0.97); }
+.hero-fade-enter-active { animation: hIn 0.6s cubic-bezier(.22,1,.36,1) forwards; }
+.hero-fade-leave-active { animation: hOut 0.3s ease forwards; }
+@keyframes hIn  { from{opacity:0;transform:translateX(20px) scale(1.01)} to{opacity:1;transform:translateX(0) scale(1)} }
+@keyframes hOut { from{opacity:1} to{opacity:0;transform:translateX(-12px)} }
+
+/* ══ GSAP 增强样式 ══ */
+
+/* 金色按钮微光效果 */
+.hero-cta::after, .nav-my-btn::after, .cp-btn::after {
+  content: '';
+  position: absolute;
+  top: 0; left: -100%; width: 60%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+  transition: left 0.6s ease;
+}
+.hero-cta, .nav-my-btn, .cp-btn { position: relative; overflow: hidden; }
+.hero-cta:hover::after, .nav-my-btn:hover::after, .cp-btn:hover::after { left: 120%; }
+
+/* 卡片悬停效果 */
+.rec-card:hover { transition: transform 0.4s cubic-bezier(.22,1,.36,1), box-shadow 0.4s ease, border-color 0.3s; }
+
+/* Hero 图片平滑 */
+.hero-img { transition: filter 0.6s ease; }
+
+/* 服务栏悬停增强 */
+.service-item {
+  position: relative;
+  overflow: hidden;
+}
+.service-item::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0; height: 2px;
+  background: linear-gradient(90deg, #A07830, #C9A84C);
+  transform: scaleX(0);
+  transition: transform 0.3s ease;
+  transform-origin: left;
+}
+.service-item:hover::after { transform: scaleX(1); }
+
+/* 品牌工坊图片增强 */
+.boutique-main img, .boutique-sub img { transition: transform 0.5s ease; }
+
+/* AI 球增强光晕 */
+.orb-core {
+  box-shadow: 0 4px 20px rgba(160,120,48,0.35),
+              0 0 40px rgba(201,168,76,0.15),
+              inset 0 1px 2px rgba(255,255,255,0.3);
+}
+.ai-orb:hover .orb-core {
+  box-shadow: 0 6px 28px rgba(160,120,48,0.5),
+              0 0 60px rgba(201,168,76,0.25),
+              inset 0 1px 2px rgba(255,255,255,0.3);
+}
+
+/* 秒杀进度条动画 */
+.flash-bar {
+  background: linear-gradient(90deg, #A07830, #C9A84C, #A07830);
+  background-size: 200% 100%;
+  animation: shimmerBar 2s linear infinite;
+}
+@keyframes shimmerBar {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* 导航栏滚动增强 */
+.site-nav {
+  transition: box-shadow 0.3s ease, background 0.3s ease;
+}
+
+/* 优惠券卡片悬停光效 */
+.coupon-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(135deg, rgba(201,168,76,0.05) 0%, transparent 50%, rgba(201,168,76,0.05) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  border-radius: inherit;
+}
+.coupon-card { position: relative; }
+.coupon-card:hover::before { opacity: 1; }
+
+/* 推荐卡片图片悬停缩放增强 */
+.rec-card:hover .rec-img-wrap img {
+  transform: scale(1.06);
+  filter: brightness(1.05);
+}
+
+/* 区块标题装饰线 */
+.section-title::after {
+  content: '';
+  display: block;
+  width: 40px;
+  height: 2px;
+  background: linear-gradient(90deg, #A07830, #C9A84C);
+  margin-top: 8px;
+  border-radius: 2px;
+  transform-origin: left;
+  animation: titleLineIn 0.8s ease forwards;
+}
+@keyframes titleLineIn {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
 
 /* ══ 响应式 ══ */
 @media (max-width:1200px) { .rec-grid{grid-template-columns:repeat(3,1fr)} .coupon-list{grid-template-columns:repeat(2,1fr)} }

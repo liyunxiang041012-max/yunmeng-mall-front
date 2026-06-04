@@ -9,5 +9,8 @@ export const getPayList = () => request.get('/py/pay/list')
 // 查询支付详情
 export const getPayDetail = (id) => request.get(`/py/pay/detail/${id}`)
 
+// 支付成功回调
+export const payCallback = (payNo) => request.post(`/py/pay/callback/${payNo}`)
+
 // 取消支付
 export const cancelPay = (id) => request.put(`/py/pay/cancel/${id}`)

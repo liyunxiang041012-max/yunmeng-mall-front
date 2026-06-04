@@ -10,13 +10,14 @@
         <div class="uh-grid"></div>
       </div>
       <div class="uh-inner">
-        <div class="avatar-wrap">
+        <div class="avatar-wrap" @click="triggerAvatarUpload">
           <div class="av-ring r1"></div>
           <div class="av-ring r2"></div>
           <div class="av-core">
   <img :src="userInfo.avatar || defaultUserImage" alt="头像" class="av-img" @error="handleAvatarError" />
 </div>
           <div class="av-edit"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></div>
+          <input ref="avatarInput" type="file" accept="image/*" style="display:none" @change="handleAvatarUpload" />
         </div>
         <div class="uh-meta">
           <h2 class="uh-name">{{ userInfo.nickname || '云梦探索者' }}</h2>
@@ -27,7 +28,7 @@
           </div>
         </div>
         <div class="uh-stats">
-          <div v-for="s in userStats" :key="s.label" class="ustat">
+          <div v-for="s in userStats" :key="s.label" class="ustat" :class="{ clickable: s.label === '关注' || s.label === '收藏' }" @click="handleStatClick(s.label)">
             <span class="ustat-num">{{ s.value }}</span>
             <span class="ustat-label">{{ s.label }}</span>
           </div>
@@ -53,7 +54,7 @@
           <em v-if="s.count > 0" class="ostatus-badge">{{ s.count }}</em>
         </div>
       </div>
-      <div class="order-list">
+      <div class="order-list" v-loading="orderLoading">
         <div v-for="order in filteredOrders" :key="order.id" class="order-card">
           <div class="order-header">
             <div class="order-shop-row">
@@ -72,7 +73,7 @@
           <div class="order-footer">
             <span class="order-total">共{{ order.totalQty }}件 · 实付 <strong>¥{{ order.total }}</strong></span>
             <div class="order-actions">
-              <button v-if="order.status==='待付款'" class="oa-primary">立即付款</button>
+              <button v-if="order.status==='待付款'" class="oa-primary" @click="$router.push(`/pay?orderId=${order.id}`)">立即付款</button>
               <button v-if="order.status==='待收货'" class="oa-default">确认收货</button>
               <button v-if="order.status==='已完成'" class="oa-primary">再次购买</button>
               <button v-if="order.status==='已完成'" class="oa-default">写评价</button>
@@ -80,17 +81,64 @@
             </div>
           </div>
           <transition name="expand">
-            <div v-if="expandedOrder === order.id && order.logistics.length" class="order-logistics">
-              <p class="logistics-title">📦 物流跟踪</p>
-              <div v-for="(step, i) in order.logistics" :key="i" :class="['ltrack', { active: i===0 }]">
-                <div class="ltrack-dot"></div>
-                <div class="ltrack-line" v-if="i < order.logistics.length-1"></div>
-                <div class="ltrack-text"><p class="ltrack-desc">{{ step.desc }}</p><p class="ltrack-time">{{ step.time }}</p></div>
-              </div>
+            <div v-if="expandedOrder === order.id" class="order-logistics">
+              <template v-if="order.logistics && order.logistics.length">
+                <p class="logistics-title">📦 物流跟踪</p>
+                <div v-for="(step, i) in order.logistics" :key="i" :class="['ltrack', { active: i===0 }]">
+                  <div class="ltrack-dot"></div>
+                  <div class="ltrack-line" v-if="i < order.logistics.length-1"></div>
+                  <div class="ltrack-text"><p class="ltrack-desc">{{ step.desc }}</p><p class="ltrack-time">{{ step.time }}</p></div>
+                </div>
+              </template>
+              <template v-else>
+                <p class="logistics-title">📋 订单详情</p>
+                <div class="order-detail-expand">
+                  <div class="ode-row"><span class="ode-label">订单编号</span><span class="ode-val">{{ order.no }}</span></div>
+                  <div class="ode-row"><span class="ode-label">订单状态</span><span class="ode-val">{{ order.status }}</span></div>
+                  <div class="ode-row"><span class="ode-label">商品数量</span><span class="ode-val">{{ order.totalQty }} 件</span></div>
+                  <div class="ode-row"><span class="ode-label">实付金额</span><span class="ode-val ode-price">¥{{ order.total }}</span></div>
+                  <div class="ode-row" v-if="order.goods.length"><span class="ode-label">商品清单</span>
+                    <span class="ode-val" v-for="g in order.goods" :key="g.id">{{ g.name }} ×{{ g.qty }}</span>
+                  </div>
+                </div>
+              </template>
             </div>
           </transition>
         </div>
         <div v-if="filteredOrders.length === 0" class="empty-state"><span class="empty-icon">📦</span><p>暂无{{ orderTab === '全部' ? '' : orderTab }}订单</p></div>
+      </div>
+    </section>
+
+    <!-- ══ 我的优惠券 ══ -->
+    <section class="section-block">
+      <div class="section-head">
+        <span class="eyebrow">COUPONS</span>
+        <h2 class="section-title">我的优惠券</h2>
+        <button class="ghost-btn" @click="$router.push('/coupon')">全部优惠券 →</button>
+      </div>
+
+      <div class="coupon-inline-list" v-loading="myCouponLoading">
+        <div v-for="c in myCouponPreview" :key="c.id" :class="['cip-card', { 'cip-used': c.status === 'used', 'cip-expired': c.status === 'expired' }]">
+          <div class="cip-left">
+            <div class="cip-amount">
+              <span v-if="c.discountType !== 'RATE_DISCOUNT'" class="cip-unit">¥</span>
+              <span class="cip-value">{{ c.discountAmount }}</span>
+            </div>
+            <span class="cip-condition" v-if="c.minAmount > 0">满 ¥{{ c.minAmount }} 可用</span>
+            <span class="cip-condition free" v-else>无门槛</span>
+          </div>
+          <div class="cip-body">
+            <p class="cip-name">{{ c.name }}</p>
+            <p class="cip-desc">{{ c.description }}</p>
+            <p class="cip-expire">{{ getCouponExpireLabel(c) }}</p>
+            <span :class="['cip-badge', c.status]">{{ c.status === 'unused' ? '可使用' : c.status === 'used' ? '已使用' : '已过期' }}</span>
+          </div>
+        </div>
+
+        <div v-if="!myCouponLoading && myCouponPreview.length === 0" class="empty-state">
+          <span class="empty-icon">🎫</span>
+          <p>暂无优惠券，去领券中心看看吧</p>
+        </div>
       </div>
     </section>
 
@@ -126,46 +174,6 @@
       </div>
     </section>
 
-    <!-- ══ 钱包 ══ -->
-    <section class="section-block">
-      <div class="section-head">
-        <span class="eyebrow">WALLET</span>
-        <h2 class="section-title">我的钱包</h2>
-        <button class="ghost-btn">账单明细 →</button>
-      </div>
-      <div class="wallet-card">
-        <div class="wc-glow"></div>
-        <div class="wc-left">
-          <p class="wc-bal-label">账户余额</p>
-          <div class="wc-bal"><span class="wc-unit">¥</span><span class="wc-num">1,286.50</span></div>
-          <p class="wc-sub">可用 ¥1,186.50 · 冻结 ¥100.00</p>
-          <div class="wc-btns"><button class="wc-btn primary">+ 充值</button><button class="wc-btn">↑ 提现</button></div>
-        </div>
-        <div class="wc-assets">
-          <div v-for="a in walletAssets" :key="a.label" class="wasset">
-            <span class="wasset-val" :style="{ color: a.color }">{{ a.value }}</span>
-            <span class="wasset-label">{{ a.label }}</span>
-            <button class="wasset-use">使用</button>
-          </div>
-        </div>
-      </div>
-      <div class="txn-wrap">
-        <div class="txn-topbar">
-          <span class="txn-title">最近收支</span>
-          <div class="txn-filters">
-            <button v-for="f in ['全部','收入','支出']" :key="f" :class="['txn-f', { active: txnFilter === f }]" @click="txnFilter = f">{{ f }}</button>
-          </div>
-        </div>
-        <div class="txn-list">
-          <div v-for="tx in filteredTxns" :key="tx.id" class="txn-item">
-            <div class="txn-icon" :class="tx.type === '收入' ? 'income' : 'expense'">{{ tx.icon }}</div>
-            <div class="txn-info"><p class="txn-name">{{ tx.name }}</p><p class="txn-time">{{ tx.time }}</p></div>
-            <span :class="['txn-amt', tx.type === '收入' ? 'income' : 'expense']">{{ tx.type === '收入' ? '+' : '-' }}¥{{ tx.amount }}</span>
-          </div>
-        </div>
-      </div>
-    </section>
-
     <!-- ══ 历史浏览 ══ -->
     <section class="section-block">
       <div class="section-head">
@@ -195,18 +203,41 @@
     </section>
 
     <!-- ══ 我的收藏 ══ -->
-    <section class="section-block">
+    <section class="section-block" id="favorites-section">
       <div class="section-head">
         <span class="eyebrow">FAVORITES</span>
         <h2 class="section-title">我的收藏</h2>
         <button class="ghost-btn">全部收藏 →</button>
       </div>
-      <div class="fav-grid">
+      <div class="fav-grid" v-loading="favLoading">
         <div v-for="item in favItems" :key="item.id" class="fav-card">
           <div class="fav-media"><img :src="item.image" :alt="item.name" @error="handleImageError" /><button class="fav-heart" @click="removeFav(item.id)">♥</button></div>
           <div class="fav-body"><p class="fav-name">{{ item.name }}</p><div class="fav-foot"><span class="fav-price">¥{{ item.price }}</span><button class="fav-buy">购买</button></div></div>
         </div>
       </div>
+      <div v-if="!favLoading && favItems.length === 0" class="empty-state"><span class="empty-icon">💔</span><p>暂无收藏商品</p></div>
+    </section>
+
+    <!-- ══ 我的关注 ══ -->
+    <section class="section-block" id="follows-section">
+      <div class="section-head">
+        <span class="eyebrow">FOLLOWING</span>
+        <h2 class="section-title">我的关注</h2>
+      </div>
+      <div class="follow-shop-list" v-loading="followLoading">
+        <div v-for="shop in followedShops" :key="shop.id" class="follow-shop-card" @click="$router.push(`/shop/${shop.id}`)">
+          <div class="fsc-avatar">{{ (shop.shopName || '店')[0] }}</div>
+          <div class="fsc-body">
+            <p class="fsc-name">{{ shop.shopName }}</p>
+            <div class="fsc-stats">
+              <span class="fsc-stat">好评率 {{ shop.goodRate || '--' }}</span>
+              <span class="fsc-stat">销量 {{ formatShopCount(shop.totalSales) }}</span>
+            </div>
+          </div>
+          <button class="fsc-unfollow" @click.stop="handleUnfollow(shop.id)">已关注</button>
+        </div>
+      </div>
+      <div v-if="!followLoading && followedShops.length === 0" class="empty-state"><span class="empty-icon">🏪</span><p>暂无关注的店铺</p></div>
     </section>
 
     <!-- ══ 更多服务 ══ -->
@@ -216,7 +247,7 @@
         <h2 class="section-title">更多服务</h2>
       </div>
       <div class="tools-grid">
-        <div v-for="tool in toolItems" :key="tool.id" class="tool-card" :style="{'--tc': tool.color}">
+        <div v-for="tool in toolItems" :key="tool.id" class="tool-card" :style="{'--tc': tool.color}" @click="handleToolClick(tool)">
           <div class="tool-icon">{{ tool.icon }}</div>
           <div class="tool-info"><span class="tool-name">{{ tool.name }}</span><span class="tool-desc">{{ tool.desc }}</span></div>
           <svg class="tool-arrow" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
@@ -224,81 +255,6 @@
         </div>
       </div>
     </section>
-<!-- ══ 会员成长 ══ -->
-<section class="section-block">
-  <div class="section-head">
-    <span class="eyebrow">MEMBERSHIP</span>
-    <h2 class="section-title">会员成长</h2>
-  </div>
-
-  <div class="member-card">
-    <!-- 背景光晕（可选） -->
-    <div class="mc-glow"></div>
-
-    <!-- 左侧：当前等级 + 进度条 + 权益 -->
-    <div class="mc-left">
-      <!-- 当前等级徽章 -->
-      <div class="mc-badge-row">
-        <div class="mc-badge-icon">{{ currentLevel.icon }}</div>
-        <div class="mc-badge-text">
-          <p class="mc-level">{{ currentLevel.name }}</p>
-          <p class="mc-exp-txt">{{ userInfo.experience }} EXP</p>
-        </div>
-      </div>
-
-      <!-- 经验进度条 -->
-      <div class="mc-progress-wrap">
-        <div class="mc-bar">
-          <div class="mc-fill" :style="{ width: levelProgress + '%' }">
-            <div class="mc-fill-dot"></div>
-          </div>
-        </div>
-        <div class="mc-bar-labels">
-          <span class="mc-exp-current">{{ userInfo.experience }} EXP</span>
-          <span class="mc-exp-next" v-if="!isMaxLevel">
-            距 {{ nextLevel?.name }} 还差 {{ nextLevelExpGap }} EXP
-          </span>
-          <span class="mc-exp-next" v-else>已达到最高等级 🎉</span>
-        </div>
-      </div>
-
-      <!-- 会员权益 -->
-      <div class="mc-perks">
-        <span v-for="p in memberPerks" :key="p" class="mc-perk">✦ {{ p }}</span>
-      </div>
-
-      <!-- 升级提示按钮（可选） -->
-      <button v-if="!isMaxLevel" class="mc-upgrade-btn" @click="goToTasks">
-        去做购物赚更多 EXP →
-      </button>
-    </div>
-
-    <!-- 右侧：全等级路线图 -->
-    <div class="mc-right">
-      <div
-        v-for="(lvl, index) in memberLevels"
-        :key="lvl.name"
-        :class="['mc-lvl', { current: lvl.current, passed: lvl.passed }]"
-      >
-        <!-- 等级图标 -->
-        <span class="mc-lvl-icon">{{ lvl.icon }}</span>
-
-        <!-- 等级信息 -->
-        <div class="mc-lvl-info">
-          <span class="mc-lvl-name">{{ lvl.name }}</span>
-          <span class="mc-lvl-req">{{ lvl.req }}</span>
-        </div>
-
-        <!-- 状态标记 -->
-        <span v-if="lvl.passed" class="mc-check">✓</span>
-        <span v-if="lvl.current && !lvl.passed" class="mc-cur-tag">当前</span>
-
-        <!-- 连接线（除最后一个） -->
-        <div v-if="index < memberLevels.length - 1" class="mc-lvl-line"></div>
-      </div>
-    </div>
-  </div>
-</section>
     <!-- ══ 账号安全 ══ -->
     <section class="section-block">
       <div class="section-head">
@@ -376,11 +332,18 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getUserDetail, getMyAddresses, addAddress, setDefaultAddress, updateAddress, deleteAddress } from '../api/user'
+import { getUserDetail, getMyAddresses, addAddress, setDefaultAddress, updateAddress, deleteAddress, uploadAvatar } from '../api/user'
+import { getUserOrders, getOrderItems } from '../api/order'
+import { getMyFavorites, toggleFavorite, getBrowseHistory, deleteBrowseHistory, clearBrowseHistory } from '../api/item'
+import { getMyCoupons } from '../api/coupon'
+import { getMyFollows, toggleFollowShop } from '../api/shop'
 import regionData from '@/assets/region.json' // 👈 替换为你存放JSON的实际路径
 import nofoundImage from '@/assets/images/nofound.png'
 import defaultUserImage from '@/assets/images/defaultuser.png'
+
+const router = useRouter()
 
 // 图片加载失败处理
 const handleImageError = (e) => {
@@ -389,7 +352,63 @@ const handleImageError = (e) => {
 
 // 头像加载失败处理
 const handleAvatarError = (e) => {
+  console.warn('[头像] 图片加载失败, 当前 src:', e.target.src)
   e.target.src = defaultUserImage
+}
+
+// 头像上传
+const avatarInput = ref(null)
+const avatarUploading = ref(false)
+
+const triggerAvatarUpload = () => {
+  avatarInput.value?.click()
+}
+
+const handleAvatarUpload = async (e) => {
+  const file = e.target.files?.[0]
+  if (!file) return
+  if (!file.type.startsWith('image/')) {
+    ElMessage.warning('请选择图片文件')
+    return
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    ElMessage.warning('图片大小不能超过 5MB')
+    return
+  }
+  try {
+    avatarUploading.value = true
+    // 拦截器已做 res => res.data，所以 res = 后端 Result 对象 {code, data, msg}
+    const res = await uploadAvatar(file)
+    console.log('[头像上传] 原始响应:', JSON.stringify(res))
+    
+    // 严格检查业务状态码
+    if (res && res.code === 200) {
+      const newAvatarUrl = res.data
+      console.log('[头像上传] 后端返回 URL:', newAvatarUrl)
+      
+      if (newAvatarUrl && typeof newAvatarUrl === 'string') {
+        const fullUrl = resolveImageUrl(newAvatarUrl)
+        // 立即更新前端显示
+        userInfo.value.avatar = fullUrl
+        console.log('[头像上传] 最终设置 src:', fullUrl)
+        ElMessage.success('头像上传成功')
+      } else {
+        console.warn('[头像上传] data 不是字符串:', typeof newAvatarUrl, newAvatarUrl)
+        ElMessage.error('上传成功但未获取到头像地址')
+      }
+    } else {
+      // 业务失败
+      const errMsg = res?.msg || res?.message || '上传失败'
+      console.warn('[头像上传] 业务失败:', res)
+      ElMessage.error(errMsg)
+    }
+  } catch (err) {
+    console.error('[头像上传] 请求异常:', err)
+    ElMessage.error(err.response?.data?.message || '头像上传失败')
+  } finally {
+    avatarUploading.value = false
+    if (avatarInput.value) avatarInput.value.value = ''
+  }
 }
 
 // 地址联动数据
@@ -557,6 +576,14 @@ const submitAddrForm = async () => {
 // 其他地址方法 (handleDeleteAddr, handleSetDefault, loadAddr) 保持你原有的不变
 
 // ─── 用户信息 ─────────────────────────────────────────────────
+// 解析后端图片路径：相对路径自动拼接后端基地址
+const resolveImageUrl = (url) => {
+  if (!url || typeof url !== 'string') return ''
+  if (url.startsWith('http')) return url
+  const baseUrl = 'http://localhost:8080'
+  return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`
+}
+
 const userInfo = ref({
   id: '',
   nickname: '',
@@ -568,53 +595,119 @@ const loadUserInfo = async () => {
   try {
     const res = await getUserDetail()
     const data = res.data || {}
+    const rawAvatar = data.avatar
     userInfo.value = {
       id:         data.id || '',
       nickname:   data.nickname || data.username || '云梦探索者',
-      avatar:     data.avatar || `https://api.dicebear.com/7.x/adventurer/svg?seed=${data.id || Math.random()}`,
+      avatar:     resolveImageUrl(rawAvatar) || `https://api.dicebear.com/7.x/adventurer/svg?seed=${data.id || Math.random()}`,
       experience: data.experience || 0,
     }
     // 根据 experience 动态更新会员等级
     updateMemberLevels(userInfo.value.experience)
-  } catch {brand
+  } catch {
     // 静默失败，保留默认值
   }
 }
 
-const userStats = ref([
-  { label: '关注', value: 128 }, { label: '粉丝', value: 56 },
-  { label: '收藏', value: 34  }, { label: '足迹', value: 210 },
+const userStats = computed(() => [
+  { label: '关注', value: shopFollowCount.value },
+  { label: '收藏', value: favItems.value.length },
+  { label: '足迹', value: footprintTotal.value },
 ])
+
+// 店铺关注数
+const followedShops = ref([])
+const followLoading = ref(false)
+const shopFollowCount = computed(() => followedShops.value.length)
 
 // ─── 订单 ─────────────────────────────────────────────────────
 const orderTab      = ref('全部')
 const expandedOrder = ref(null)
-const orderStatuses = ref([
-  { label: '全部',     icon: '📋', count: 0 }, { label: '待付款',   icon: '⏳', count: 1 },
-  { label: '待发货',   icon: '📦', count: 2 }, { label: '待收货',   icon: '🚚', count: 1 },
-  { label: '已完成',   icon: '✓',  count: 0 }, { label: '退款售后', icon: '↩️', count: 0 },
-])
-const orders = ref([
-  { id: 1, shop: '云梦精选旗舰店', no: 'YM202603181423', status: '待收货', statusClass: 'st-shipping', total: '218.00', totalQty: 2,
-    goods: [
-      { id: 1, image: 'https://picsum.photos/100/100?random=1', name: '极简无线降噪耳机', sku: '黑色 / 标准版', price: '89.00', qty: 1 },
-      { id: 2, image: 'https://picsum.photos/100/100?random=2', name: '轻量碳纤维背包',   sku: '深空灰 / 20L', price: '129.00', qty: 1 },
-    ],
-    logistics: [
-      { desc: '您的包裹已到达【上海浦东新区派送站】，派件员正在派送', time: '2026-03-18 09:30' },
-      { desc: '包裹已从【上海转运中心】发出', time: '2026-03-17 22:14' },
-      { desc: '商品已出库，快递公司揽收',     time: '2026-03-17 14:05' },
-    ]
-  },
-  { id: 2, shop: '全球好物直邮', no: 'YM202603151820', status: '已完成', statusClass: 'st-done', total: '599.00', totalQty: 1,
-    goods: [{ id: 3, image: 'https://picsum.photos/100/100?random=3', name: 'AI智能降噪蓝牙耳机旗舰版', sku: '星空白 / 旗舰版', price: '599.00', qty: 1 }],
-    logistics: [{ desc: '您已确认收货，交易完成', time: '2026-03-17 16:00' }, { desc: '包裹已签收', time: '2026-03-17 15:42' }]
-  },
-  { id: 3, shop: '云梦精选旗舰店', no: 'YM202603181956', status: '待付款', statusClass: 'st-pending', total: '349.00', totalQty: 1,
-    goods: [{ id: 4, image: 'https://picsum.photos/100/100?random=4', name: '多功能空气炸锅无油烹饪', sku: '白色 / 4.5L', price: '349.00', qty: 1 }],
-    logistics: []
-  },
-])
+const orderLoading  = ref(false)
+
+// 后端状态枚举 → 前端显示（兼容整数和字符串枚举名）
+const statusMap = {
+  0: { label: '待付款',   statusClass: 'st-pending'  },
+  1: { label: '待发货',   statusClass: 'st-paid'     },
+  2: { label: '待收货',   statusClass: 'st-shipping' },
+  3: { label: '已完成',   statusClass: 'st-done'     },
+  4: { label: '已取消',   statusClass: 'st-cancel'   },
+  5: { label: '退款售后', statusClass: 'st-refund'   },
+  // 兼容后端返回字符串枚举名
+  'PENDING_PAYMENT': { label: '待付款',   statusClass: 'st-pending'  },
+  'PAID':            { label: '待发货',   statusClass: 'st-paid'     },
+  'SHIPPED':         { label: '待收货',   statusClass: 'st-shipping' },
+  'COMPLETED':       { label: '已完成',   statusClass: 'st-done'     },
+  'CANCELLED':       { label: '已取消',   statusClass: 'st-cancel'   },
+  'REFUNDED':        { label: '退款售后', statusClass: 'st-refund'   },
+}
+
+const orders = ref([])
+
+const orderStatuses = computed(() => {
+  const counts = { '待付款': 0, '待发货': 0, '待收货': 0, '已完成': 0, '已取消': 0, '退款售后': 0 }
+  orders.value.forEach(o => {
+    if (counts[o.status] !== undefined) counts[o.status]++
+  })
+  return [
+    { label: '全部',     icon: '📋', count: orders.value.length },
+    { label: '待付款',   icon: '⏳', count: counts['待付款']   },
+    { label: '待发货',   icon: '📦', count: counts['待发货']   },
+    { label: '待收货',   icon: '🚚', count: counts['待收货']   },
+    { label: '已完成',   icon: '✓',  count: counts['已完成']   },
+    { label: '已取消',   icon: '✕',  count: counts['已取消']   },
+    { label: '退款售后', icon: '↩️', count: counts['退款售后'] },
+  ]
+})
+
+const loadOrders = async () => {
+  orderLoading.value = true
+  try {
+    const res = await getUserOrders()
+    const list = res.data || []
+    console.log('[订单列表] 后端返回:', JSON.stringify(list.map(o => ({ id: o.id, status: o.status, statusType: typeof o.status }))))
+    // 并行获取每个订单的商品明细
+    const ordersWithItems = await Promise.all(
+      list.map(async (order) => {
+        const sm = statusMap[order.status] || { label: '未知', statusClass: '' }
+        let goods = []
+        try {
+          const itemsRes = await getOrderItems(order.id)
+          const itemsData = itemsRes.data || []
+          goods = itemsData.map(item => ({
+            id: item.id,
+            image: item.image || item.imageUrl || '',
+            name: item.name || item.itemName || '',
+            sku: item.sku || item.skuName || '',
+            price: item.price ? (item.price / 100).toFixed(2) : '0.00',
+            qty: item.quantity || 0,
+          }))
+        } catch { /* 明细获取失败不影响订单展示 */ }
+
+        const totalQty = goods.reduce((s, g) => s + g.qty, 0)
+        const totalAmount = order.totalAmount ? (order.totalAmount / 100).toFixed(2) : '0.00'
+
+        return {
+          id: order.id,
+          shop: order.shopName || '云梦商城',
+          no: order.orderNo || order.id,
+          status: sm.label,
+          statusClass: sm.statusClass,
+          total: totalAmount,
+          totalQty,
+          goods,
+          logistics: [],  // 物流信息后端暂未提供
+        }
+      })
+    )
+    orders.value = ordersWithItems
+  } catch (err) {
+    console.error('加载订单失败:', err)
+  } finally {
+    orderLoading.value = false
+  }
+}
+
 const filteredOrders = computed(() => orderTab.value === '全部' ? orders.value : orders.value.filter(o => o.status === orderTab.value))
 const toggleLogistics = (id) => { expandedOrder.value = expandedOrder.value === id ? null : id }
 
@@ -666,57 +759,198 @@ const loadAddr = async () => {
   }
 }
 
-// ─── 钱包 ─────────────────────────────────────────────────────
-const txnFilter    = ref('全部')
-const walletAssets = ref([
-  { label: '优惠券', value: '8张',   color: '#a78bfa' },
-  { label: '积分',   value: '3,280', color: '#f0cc7a' },
-  { label: '红包',   value: '¥30',   color: '#ff5c75' },
-  { label: '礼品卡', value: '2张',   color: '#38bdf8' },
-])
-const transactions = ref([
-  { id: 1, type: '支出', icon: '🛍️', name: '订单支付 · 极简降噪耳机', time: '2026-03-18 14:23', amount: '89.00'  },
-  { id: 2, type: '收入', icon: '↩️', name: '退款到账 · 轻量背包',     time: '2026-03-17 09:11', amount: '129.00' },
-  { id: 3, type: '支出', icon: '🛍️', name: '订单支付 · 香氛套装',     time: '2026-03-16 20:05', amount: '59.00'  },
-  { id: 4, type: '收入', icon: '🎁', name: '新人红包奖励',             time: '2026-03-15 00:00', amount: '30.00'  },
-  { id: 5, type: '支出', icon: '💳', name: '会员充值',                 time: '2026-03-14 16:40', amount: '98.00'  },
-  { id: 6, type: '收入', icon: '💰', name: '余额充值',                 time: '2026-03-12 11:22', amount: '500.00' },
-])
-const filteredTxns = computed(() => txnFilter.value === '全部' ? transactions.value : transactions.value.filter(t => t.type === txnFilter.value))
-
 // ─── 历史浏览 ─────────────────────────────────────────────────
 const historyDate  = ref('今天')
-const historyItems = ref([
-  { id: 1, image: 'https://picsum.photos/280/360?random=20', name: '极简风阔腿裤春秋新款',     price: '128',  viewTime: '10分钟前' },
-  { id: 2, image: 'https://picsum.photos/280/360?random=21', name: 'AI智能降噪蓝牙耳机旗舰版', price: '599',  viewTime: '32分钟前' },
-  { id: 3, image: 'https://picsum.photos/280/360?random=22', name: '手工研磨挂耳咖啡礼盒20入', price: '89',   viewTime: '1小时前'  },
-  { id: 4, image: 'https://picsum.photos/280/360?random=23', name: '复古黑胶唱片机家用音响',   price: '1299', viewTime: '2小时前'  },
-  { id: 5, image: 'https://picsum.photos/280/360?random=24', name: '北欧风实木床头柜简约现代', price: '219',  viewTime: '3小时前'  },
-  { id: 6, image: 'https://picsum.photos/280/360?random=25', name: '香氛扩香石套装精品礼盒',   price: '59',   viewTime: '5小时前'  },
-])
-const removeHistory = (id) => { historyItems.value = historyItems.value.filter(i => i.id !== id) }
-const clearHistory  = () => { historyItems.value = [] }
+const historyItems = ref([])
+const historyLoading = ref(false)
+const footprintTotal = ref(0)
+
+const formatViewTime = (timeStr) => {
+  if (!timeStr) return ''
+  try {
+    const date = new Date(timeStr)
+    const now = new Date()
+    const diff = now - date
+    const minutes = Math.floor(diff / 60000)
+    const hours = Math.floor(diff / 3600000)
+    if (minutes < 1) return '刚刚'
+    if (minutes < 60) return `${minutes}分钟前`
+    if (hours < 24) return `${hours}小时前`
+    if (hours < 48) return '昨天'
+    return `${Math.floor(hours / 24)}天前`
+  } catch {
+    return timeStr
+  }
+}
+
+const loadHistory = async () => {
+  historyLoading.value = true
+  try {
+    const res = await getBrowseHistory({ page: 1, size: 20 })
+    // 后端返回 PageDTO 分页结构，数据在 data.list 中
+    const pageData = res?.data ?? res
+    const list = Array.isArray(pageData?.list) ? pageData.list : []
+    footprintTotal.value = pageData?.total ?? list.length
+    historyItems.value = list.map(h => ({
+      id: h.id,
+      image: resolveImageUrl(h.mainImage || h.image || ''),
+      name: h.name || h.itemName || '',
+      price: formatPrice(h.price),
+      viewTime: formatViewTime(h.createTime || h.viewTime),
+    }))
+  } catch (err) {
+    console.error('[历史浏览] 加载失败:', err)
+    console.error('[历史浏览] 响应详情:', err.response?.data)
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+const removeHistory = async (id) => {
+  try {
+    await deleteBrowseHistory(id)
+    historyItems.value = historyItems.value.filter(i => i.id !== id)
+    ElMessage.success('已移除')
+  } catch (err) {
+    ElMessage.error(err.response?.data?.message || '操作失败')
+  }
+}
+
+const clearHistory = async () => {
+  try {
+    await ElMessageBox.confirm('确认清空所有浏览记录？', '提示', {
+      confirmButtonText: '清空', cancelButtonText: '取消', type: 'warning'
+    })
+    await clearBrowseHistory()
+    historyItems.value = []
+    ElMessage.success('已清空')
+  } catch {
+    // 取消
+  }
+}
 
 // ─── 收藏 ─────────────────────────────────────────────────────
-const favItems = ref([
-  { id: 1, image: 'https://picsum.photos/280/340?random=30', name: '轻奢皮革钱包男士长款', price: '299' },
-  { id: 2, image: 'https://picsum.photos/280/340?random=31', name: '智能温控随行杯保温',   price: '168' },
-  { id: 3, image: 'https://picsum.photos/280/340?random=32', name: '真皮手工笔记本A5',     price: '78'  },
-  { id: 4, image: 'https://picsum.photos/280/340?random=33', name: '无线充电桌面台灯',     price: '399' },
-])
-const removeFav = (id) => { favItems.value = favItems.value.filter(i => i.id !== id) }
+const favItems = ref([])
+const favLoading = ref(false)
+
+const formatPrice = (price) => {
+  if (!price && price !== 0) return '--'
+  return (price / 100).toFixed(2)
+}
+
+const loadFavorites = async () => {
+  favLoading.value = true
+  try {
+    const res = await getMyFavorites({ page: 1, size: 20 })
+    // 后端返回 PageDTO 分页结构，数据在 data.list 中
+    const pageData = res?.data ?? res
+    const list = Array.isArray(pageData?.list) ? pageData.list : []
+    favItems.value = list.map(item => ({
+      id: item.id ?? item.itemId,
+      itemId: item.itemId ?? item.id,
+      image: resolveImageUrl(item.mainImage || item.image || ''),
+      name: item.name || item.itemName || '',
+      price: formatPrice(item.price),
+    }))
+  } catch (err) {
+    console.error('[收藏] 加载失败:', err)
+    console.error('[收藏] 响应详情:', err.response?.data)
+  } finally {
+    favLoading.value = false
+  }
+}
+
+// ─── 我的优惠券（内嵌预览） ───
+const myCouponPreview = ref([])
+const myCouponLoading = ref(false)
+
+const formatCouponAmount = (val, discountType) => {
+  if (!val && val !== 0) return '--'
+  const n = Number(val)
+  if (discountType === 'RATE_DISCOUNT') {
+    return `${(n / 10).toFixed(1)}折`.replace('.0折', '折')
+  }
+  return n > 100 ? (n / 100).toFixed(0) : String(n)
+}
+
+const formatCouponDiscountType = (type) => {
+  const map = {
+    'PRICE_DISCOUNT': '满减券',
+    'PER_PRICE_DISCOUNT': '每满减券',
+    'RATE_DISCOUNT': '折扣券',
+    'NO_THRESHOLD': '无门槛券',
+  }
+  return map[type] || type || '全场通用'
+}
+
+const normalizeCouponStatus = (s) => {
+  if (!s && s !== 0) return 'unused'
+  if (s === 1 || s === '1') return 'unused'
+  if (s === 2 || s === '2') return 'used'
+  if (s === 3 || s === '3') return 'expired'
+  return 'unused'
+}
+
+const getCouponExpireLabel = (c) => {
+  if (c.status === 'used') return '已使用'
+  if (c.status === 'expired') return '已过期'
+  if (!c.expireTime) return ''
+  // 格式化时间戳
+  const t = c.expireTime
+  if (typeof t === 'string' && t.includes('T')) return `有效期至 ${t.split('T')[0]}`
+  return `有效期至 ${t}`
+}
+
+const loadMyCouponsPreview = async () => {
+  myCouponLoading.value = true
+  try {
+    const res = await getMyCoupons({ pageNo: 1, pageSize: 6 })
+    const list = res?.list ?? []
+    myCouponPreview.value = list.map(c => ({
+      id: c.id,
+      name: c.name,
+      discountType: c.discountType,
+      description: formatCouponDiscountType(c.discountType),
+      discountAmount: formatCouponAmount(c.discountValue, c.discountType),
+      minAmount: c.thresholdAmount > 100 ? (c.thresholdAmount / 100).toFixed(0) : String(c.thresholdAmount),
+      expireTime: c.termEndTime || '',
+      status: normalizeCouponStatus(c.status),
+    }))
+  } catch (err) {
+    console.error('[我的优惠券预览] 加载失败:', err)
+  } finally {
+    myCouponLoading.value = false
+  }
+}
+
+const removeFav = async (id) => {
+  try {
+    const item = favItems.value.find(i => i.id === id)
+    const itemId = item?.itemId || id
+    await toggleFavorite(itemId)
+    favItems.value = favItems.value.filter(i => i.id !== id)
+    ElMessage.success('已取消收藏')
+  } catch (err) {
+    ElMessage.error(err.response?.data?.message || '操作失败')
+  }
+}
 
 // ─── 工具 ─────────────────────────────────────────────────────
 const toolItems = ref([
   { id: 1, icon: '⭐', name: '商品评价',   desc: '待评价 3 件',  color: '#f0cc7a', badge: '3'   },
   { id: 2, icon: '🔔', name: '消息通知',   desc: '2条未读',      color: '#a78bfa', badge: '2'   },
-  { id: 3, icon: '🎫', name: '我的优惠券', desc: '8张可用',      color: '#f472b6', badge: '8'   },
+  { id: 3, icon: '🎫', name: '我的优惠券', desc: '8张可用',      color: '#f472b6', badge: '8',   path: '/coupon' },
   { id: 4, icon: '🎁', name: '礼品卡',     desc: '2张未使用',    color: '#22c55e', badge: null  },
   { id: 5, icon: '🤝', name: '邀请有礼',   desc: '邀好友得红包', color: '#ff6b35', badge: 'NEW' },
   { id: 6, icon: '📊', name: '消费统计',   desc: '查看消费报告', color: '#38bdf8', badge: null  },
   { id: 7, icon: '📍', name: '收货地址',   desc: '管理收货地址', color: '#818cf8', badge: null  },
   { id: 8, icon: '🛡️', name: '账号安全',   desc: '保护账号安全', color: '#94a3b8', badge: null  },
 ])
+
+const handleToolClick = (tool) => {
+  if (tool.path) router.push(tool.path)
+}
+
 // 是否已达最高等级
 const isMaxLevel = computed(() => {
   return currentLevel.value?.name === '钻石会员' // 或根据你的最高等级名调整
@@ -734,10 +968,7 @@ const nextLevelExpGap = computed(() => {
   if (!nextLevel.value) return 0
   return nextLevel.value.minExp - userInfo.value.experience
 })
-// ─── 会员 ─────────────────────────────────────────────────────
-const memberPerks  = ['专属折扣', '生日礼包', '优先客服', '积分加倍']
-
-// 等级阈值配置
+// ─── 会员（仅英雄区使用） ─────────────────────────────────────
 const levelThresholds = [0, 500, 2000, 4000, 10000]
 
 const memberLevels = ref([
@@ -783,10 +1014,62 @@ const securityItems = ref([
 ])
 
 
+// ─── 关注 ─────────────────────────────────────────────────────
+const loadFollows = async () => {
+  followLoading.value = true
+  try {
+    const res = await getMyFollows({ page: 1, size: 50 })
+    const pageData = res?.data ?? res
+    const list = Array.isArray(pageData?.list) ? pageData.list : (Array.isArray(pageData) ? pageData : [])
+    followedShops.value = list.map(s => ({
+      id: s.id ?? s.shopId,
+      shopName: s.shopName || s.name || '',
+      goodRate: s.goodRate || '',
+      totalSales: s.totalSales || 0,
+    }))
+  } catch (err) {
+    console.error('[关注] 加载失败:', err)
+  } finally {
+    followLoading.value = false
+  }
+}
+
+const handleUnfollow = async (shopId) => {
+  try {
+    await toggleFollowShop(shopId)
+    followedShops.value = followedShops.value.filter(s => s.id !== shopId)
+    ElMessage.success('已取消关注')
+  } catch (err) {
+    ElMessage.error(err.response?.data?.message || '操作失败')
+  }
+}
+
+const scrollToSection = (id) => {
+  const el = document.getElementById(id)
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+const handleStatClick = (label) => {
+  if (label === '关注') scrollToSection('follows-section')
+  else if (label === '收藏') scrollToSection('favorites-section')
+}
+
+const formatShopCount = (n) => {
+  if (!n && n !== 0) return '--'
+  if (n >= 10000) return `${(n / 10000).toFixed(1)}万`
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
+  return String(n)
+}
+
 // ─── 初始化 ───────────────────────────────────────────────────
 onMounted(() => {
   loadUserInfo()
   loadAddr()
+  loadOrders()
+  loadFavorites()
+  loadFollows()
+  loadHistory()
+  loadMyCouponsPreview()
 })
 </script>
 <style scoped>
@@ -946,6 +1229,8 @@ onMounted(() => {
 .ustat { display: flex; flex-direction: column; align-items: center; padding: 18px 28px; cursor: pointer; transition: .2s; border-right: 1px solid var(--border); }
 .ustat:last-child { border-right: none; }
 .ustat:hover { background: var(--gold-bg); }
+.ustat.clickable { cursor: pointer; }
+.ustat.clickable:hover .ustat-num { color: var(--gold); }
 .ustat-num   { font-family: 'Space Mono', monospace; font-size: 22px; font-weight: 700; color: var(--text); line-height: 1; margin-bottom: 5px; }
 .ustat-label { font-size: 11px; color: var(--text3); }
 
@@ -985,8 +1270,11 @@ onMounted(() => {
 .order-no   { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--text3); }
 .order-stag { font-size: 11px; font-weight: 500; padding: 4px 12px; border-radius: 100px; }
 .st-pending  { color: #8A6010; background: rgba(201,168,76,0.12); border: 1px solid rgba(201,168,76,0.35); }
+.st-paid     { color: #2C5F8A; background: rgba(44,95,138,0.1);  border: 1px solid rgba(44,95,138,0.3); }
 .st-shipping { color: #1A5C8A; background: rgba(41,128,185,0.1);  border: 1px solid rgba(41,128,185,0.3); }
 .st-done     { color: #1A6A3A; background: rgba(39,174,96,0.1);   border: 1px solid rgba(39,174,96,0.3); }
+.st-cancel   { color: #8A8070; background: rgba(138,128,112,0.1); border: 1px solid rgba(138,128,112,0.3); }
+.st-refund   { color: #C0392B; background: rgba(192,57,43,0.08);  border: 1px solid rgba(192,57,43,0.25); }
 
 .order-goods { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
 .order-good  { display: flex; align-items: center; gap: 14px; }
@@ -1022,6 +1310,13 @@ onMounted(() => {
 .ltrack-line { position: absolute; left: 4px; top: 14px; bottom: 0; width: 1px; background: var(--border); }
 .ltrack-desc { font-size: 12px; color: var(--text2); line-height: 1.5; }
 .ltrack-time { font-size: 10px; color: var(--text3); margin-top: 2px; font-family: 'Space Mono', monospace; }
+
+/* 订单详情展开 */
+.order-detail-expand { display: flex; flex-direction: column; gap: 8px; }
+.ode-row { display: flex; align-items: baseline; gap: 12px; font-size: 12px; }
+.ode-label { color: var(--text3); flex-shrink: 0; min-width: 60px; }
+.ode-val { color: var(--text); }
+.ode-price { color: var(--gold); font-weight: 600; font-family: 'Space Mono', monospace; }
 
 .expand-enter-active,.expand-leave-active { transition: all .3s ease; overflow: hidden; }
 .expand-enter-from,.expand-leave-to { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; }
@@ -1116,6 +1411,34 @@ onMounted(() => {
 .fav-buy   { padding: 6px 14px; background: linear-gradient(135deg, #A07830, #C9A84C); border: none; border-radius: 100px; color: #FFF; font-family: inherit; font-size: 11px; font-weight: 500; cursor: pointer; transition: .2s; }
 .fav-buy:hover { background: linear-gradient(135deg, #C9A84C, #EDD97A); }
 
+/* ══ 关注店铺 ══ */
+.follow-shop-list { display: flex; flex-direction: column; gap: 10px; }
+.follow-shop-card {
+  display: flex; align-items: center; gap: 16px;
+  background: #FFF; border: 1px solid var(--border);
+  border-radius: 14px; padding: 18px 22px; transition: .25s;
+  cursor: pointer; box-shadow: var(--shadow);
+}
+.follow-shop-card:hover { border-color: var(--gold-hi); box-shadow: var(--shadow2); transform: translateY(-2px); }
+.fsc-avatar {
+  width: 48px; height: 48px; border-radius: 14px; flex-shrink: 0;
+  background: linear-gradient(135deg, #A07830, #C9A84C);
+  color: #FFF; font-size: 18px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center;
+}
+.fsc-body { flex: 1; }
+.fsc-name { font-size: 14px; font-weight: 500; color: var(--text); margin-bottom: 6px; }
+.fsc-stats { display: flex; gap: 16px; }
+.fsc-stat { font-size: 11px; color: var(--text3); }
+.fsc-unfollow {
+  padding: 7px 16px; border-radius: 100px;
+  border: 1px solid rgba(201,168,76,0.4);
+  background: var(--gold-bg); color: var(--gold);
+  font-family: inherit; font-size: 12px; font-weight: 500;
+  cursor: pointer; transition: .2s; white-space: nowrap;
+}
+.fsc-unfollow:hover { background: rgba(192,57,43,0.08); border-color: rgba(192,57,43,0.4); color: #C0392B; }
+
 /* ══ 工具 ══ */
 .tools-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; }
 .tool-card { display: flex; align-items: center; gap: 14px; background: #FFF; border: 1px solid var(--border); border-radius: 14px; padding: 18px 16px; cursor: pointer; transition: .25s; position: relative; overflow: hidden; box-shadow: var(--shadow); }
@@ -1130,7 +1453,63 @@ onMounted(() => {
 .tool-card:hover .tool-arrow { color: var(--gold); transform: translateX(3px); }
 .tool-badge { position: absolute; top: 10px; right: 10px; z-index: 2; background: linear-gradient(135deg, #A07830, #C9A84C); color: #FFF; font-size: 9px; font-weight: 700; font-style: normal; padding: 2px 7px; border-radius: 100px; }
 
-/* ══ 会员 ══ */
+/* ══ 我的优惠券内嵌 ══ */
+.coupon-inline-list { display: flex; flex-direction: column; gap: 10px; }
+.cip-card {
+  display: flex; align-items: stretch;
+  background: #FFF; border: 1px solid var(--border);
+  border-radius: 12px; overflow: hidden; transition: .25s;
+  box-shadow: var(--shadow);
+}
+.cip-card:hover { border-color: var(--gold-hi); box-shadow: var(--shadow2); }
+.cip-card.cip-used, .cip-card.cip-expired { opacity: .5; pointer-events: none; }
+
+.cip-left {
+  width: 110px; flex-shrink: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 16px 12px; gap: 6px;
+  background: linear-gradient(180deg, rgba(201,168,76,0.06) 0%, transparent 60%),
+              linear-gradient(180deg, #FFF 0%, var(--bg2) 100%);
+  border-right: 1px dashed rgba(201,168,76,0.2);
+}
+.cip-amount { display: flex; align-items: baseline; gap: 2px; }
+.cip-unit { font-size: 13px; font-weight: 600; color: #B8444A; }
+.cip-value { font-size: 32px; font-weight: 600; color: #B8444A; line-height: .9; font-family: 'Space Mono', monospace; }
+.cip-condition { font-size: 10px; color: var(--text3); }
+.cip-condition.free { color: #3A7D5A; }
+
+.cip-body { flex: 1; padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; }
+.cip-name { font-size: 14px; font-weight: 500; color: var(--text); }
+.cip-desc { font-size: 11px; color: var(--text3); }
+.cip-expire { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--text3); }
+.cip-badge {
+  align-self: flex-start; font-size: 10px; font-weight: 500;
+  padding: 2px 10px; border-radius: 100px;
+}
+.cip-badge.unused  { color: #3A7D5A; background: rgba(58,125,90,0.08); border: 1px solid rgba(58,125,90,0.15); }
+.cip-badge.used    { color: var(--text3); background: rgba(160,152,136,0.06); border: 1px solid rgba(160,152,136,0.12); }
+.cip-badge.expired { color: #B8444A; background: rgba(184,68,74,0.06); border: 1px solid rgba(184,68,74,0.12); }
+
+/* ══ 支付方式 ══ */
+.pay-methods { display: flex; gap: 12px; padding: 16px 20px; }
+.pay-method {
+  flex: 1; display: flex; align-items: center; gap: 12px;
+  padding: 16px 18px; border-radius: 10px;
+  background: var(--bg2); border: 1px solid var(--border);
+  transition: .2s; cursor: default;
+}
+.pay-method:hover { border-color: var(--gold-hi); }
+.pm-icon { font-size: 22px; width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; }
+.pm-icon.green-bg { background: rgba(7,193,96,0.1); }
+.pm-icon.blue-bg  { background: rgba(22,119,255,0.1); }
+.pm-name { font-size: 13px; font-weight: 500; color: var(--text); flex: 1; }
+.pm-tag {
+  font-size: 10px; color: #3A7D5A; font-weight: 500;
+  padding: 2px 8px; border-radius: 100px;
+  background: rgba(58,125,90,0.08); border: 1px solid rgba(58,125,90,0.15);
+}
+
+/* ══ 会员（保留英雄区等级标签） ══ */
 .member-card {
   position: relative; border-radius: 18px; overflow: hidden;
   border: 1px solid rgba(201,168,76,0.3);

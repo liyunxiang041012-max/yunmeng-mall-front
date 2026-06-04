@@ -1,13 +1,9 @@
 <script setup>
-// 导入路由并使用
 import { useRouter } from 'vue-router'
-
-// 初始化路由实例（如果需要在根组件中使用路由相关功能）
 const router = useRouter()
 </script>
 
 <template>
-  <!-- 路由视图容器，确保登录页面能占满整个视口 -->
   <div class="app-container">
     <router-view />
   </div>
@@ -39,5 +35,27 @@ body {
   width: 100%;
   overflow-y: auto;
   overflow-x: hidden;
+}
+
+/* 全局滚动条美化 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(201,168,76,0.3);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(201,168,76,0.5);
+}
+
+/* 全局选中色 */
+::selection {
+  background: rgba(201,168,76,0.2);
+  color: #1A1A18;
 }
 </style>

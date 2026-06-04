@@ -12,4 +12,13 @@ export const setDefaultAddress = (id)      => request.put(`/us/address/setDefaul
 export const updateAddress    = (id, data) => request.put(`/us/address/update/${id}`, data)
 export const deleteAddress    = (id)       => request.delete(`/us/address/delete/${id}`)
 
+// 上传头像
+export const uploadAvatar = (file) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post('/us/user-profile/avatar', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+}
+
 export const userLogout = () => request.post('/us/user/logout')

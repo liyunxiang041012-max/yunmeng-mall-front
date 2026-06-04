@@ -59,7 +59,7 @@
               </div>
               <div class="review-overview">
                 <div class="ro-score">
-                  <span class="ros-num">4.8</span>
+                  <span class="ros-num">{{ avgRating }}</span>
                   <div class="ros-stars">
                     <span v-for="i in 5" :key="i" class="star">★</span>
                   </div>
@@ -88,13 +88,12 @@
                   <span class="rfi-box"></span>只看有图
                 </label>
               </div>
-              <div class="review-list">
+              <div class="review-list" v-loading="reviewLoading">
                 <div v-for="rv in filteredReviews" :key="rv.id" class="review-item">
                   <div class="ri-head">
-                    <div class="ri-avatar">{{ rv.name[0] }}</div>
+                    <div class="ri-avatar">{{ (rv.name || '匿')[0] }}</div>
                     <div class="ri-meta">
                       <span class="ri-name">{{ rv.name }}</span>
-                      <span class="ri-sku">{{ rv.sku }}</span>
                     </div>
                     <div class="ri-right">
                       <div class="ri-stars">
@@ -104,21 +103,17 @@
                     </div>
                   </div>
                   <p class="ri-text">{{ rv.text }}</p>
-                  <div class="ri-imgs" v-if="rv.imgs && rv.imgs.length">
-                    <img v-for="(img,i) in rv.imgs" :key="i" :src="img" class="ri-img" @error="handleImageError" />
-                  </div>
-                  <div class="ri-tags" v-if="rv.tags && rv.tags.length">
-                    <span v-for="t in rv.tags" :key="t" class="ri-tag">{{ t }}</span>
-                  </div>
                   <div class="ri-foot">
-                    <button class="ri-like" @click="rv.liked=!rv.liked; rv.likes+=(rv.liked?1:-1)">
+                    <button class="ri-like" @click="handleLike(rv)">
                       <svg width="12" height="12" viewBox="0 0 24 24" :fill="rv.liked?'#A07830':'none'" stroke="#A07830" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
                       有用 ({{ rv.likes }})
                     </button>
+                    <span v-if="rv.replyCount > 0" class="ri-reply-hint">{{ rv.replyCount }} 条回复</span>
                   </div>
-                  <div class="ri-shop-reply" v-if="rv.shopReply">
-                    <span class="sr-label">商家回复：</span><span class="sr-text">{{ rv.shopReply }}</span>
-                  </div>
+                </div>
+                <div v-if="!reviewLoading && filteredReviews.length === 0" class="empty-state">
+                  <span class="empty-icon">💬</span>
+                  <p>暂无评价，成为第一个评价的人吧</p>
                 </div>
               </div>
               <div class="write-review">
@@ -137,65 +132,6 @@
                 </div>
               </div>
             </div>
-  
-            <!-- ══ 商品问答 ══ -->
-            <div class="section-card" id="qa">
-              <div class="sc-head">
-                <span class="sc-title">商品问答</span>
-                <span class="sc-count">{{ qaList.length }} 个问题</span>
-              </div>
-              <div class="ask-box">
-                <div class="ab-head">有疑问？来提问</div>
-                <textarea v-model="myQuestion" class="ab-textarea" placeholder="描述你的问题，买家和商家都可以回答..." maxlength="200"></textarea>
-                <div class="ab-foot">
-                  <label class="ab-anon">
-                    <input v-model="isAnon" type="checkbox" class="ab-anon-real" />
-                    <span class="ab-anon-box"></span>匿名提问
-                  </label>
-                  <span class="ab-count">{{ myQuestion.length }}/200</span>
-                  <button class="ab-submit" :disabled="!myQuestion.trim()" @click="submitQuestion">提交问题</button>
-                </div>
-              </div>
-              <div class="qa-list">
-                <div v-for="qa in qaList" :key="qa.id" class="qa-item">
-                  <div class="qa-question">
-                    <div class="qa-q-icon">Q</div>
-                    <div class="qa-q-body">
-                      <p class="qa-q-text">{{ qa.question }}</p>
-                      <div class="qa-q-meta">
-                        <span class="qa-q-user">{{ qa.isAnon ? '匿名用户' : qa.user }}</span>
-                        <span class="qa-q-date">{{ qa.date }}</span>
-                        <span class="qa-q-views">{{ qa.views }} 人看过</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div class="qa-answers">
-                    <div v-for="ans in qa.answers" :key="ans.id" class="qa-answer">
-                      <div class="qa-a-icon" :class="{ shop: ans.isShop }">{{ ans.isShop ? '商' : 'A' }}</div>
-                      <div class="qa-a-body">
-                        <div class="qa-a-head">
-                          <span class="qa-a-user" :class="{ shop: ans.isShop }">{{ ans.isShop ? '官方客服' : ans.user }}</span>
-                          <span class="qa-a-date">{{ ans.date }}</span>
-                          <button class="qa-a-like" @click="ans.liked=!ans.liked; ans.likes+=(ans.liked?1:-1)">
-                            <svg width="11" height="11" viewBox="0 0 24 24" :fill="ans.liked?'#A07830':'none'" stroke="#A07830" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
-                            {{ ans.likes }}
-                          </button>
-                        </div>
-                        <p class="qa-a-text">{{ ans.text }}</p>
-                      </div>
-                    </div>
-                    <div class="qa-reply-area" v-if="qa.showReply">
-                      <textarea v-model="qa.replyText" class="qa-reply-input" placeholder="写下你的回答..." maxlength="300"></textarea>
-                      <div class="qa-reply-foot">
-                        <button class="qa-reply-cancel" @click="qa.showReply=false">取消</button>
-                        <button class="qa-reply-submit" :disabled="!qa.replyText?.trim()" @click="submitAnswer(qa)">发布回答</button>
-                      </div>
-                    </div>
-                    <button class="qa-answer-btn" @click="qa.showReply=!qa.showReply" v-if="!qa.showReply">我来回答</button>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
   
           <!-- ── 右侧购买栏 ── -->
@@ -207,9 +143,7 @@
                 <div class="bc-rating">
                   <span class="bc-stars">★★★★★</span>
                   <span class="bc-score">4.8</span>
-                  <a href="#reviews" class="bc-review-link">128条评价</a>
-                  <span class="bc-sep">·</span>
-                  <a href="#qa" class="bc-review-link">23个问答</a>
+                  <a href="#reviews" class="bc-review-link">{{ reviews.length }}条评价</a>
                 </div>
               </div>
               <div class="bc-divider"></div>
@@ -286,11 +220,15 @@
               <div class="bc-divider"></div>
               <!-- 桌面端购买按钮 -->
               <div class="bc-btns">
+                <button class="btn-fav" @click="handleToggleFavorite" :disabled="favoriting">
+                  <svg width="15" height="15" viewBox="0 0 24 24" :fill="isFavorited ? '#E74C3C' : 'none'" :stroke="isFavorited ? '#E74C3C' : 'currentColor'" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                  {{ isFavorited ? '已收藏' : '收藏' }}
+                </button>
                 <button class="btn-cart" @click="addToCart">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
                   加入购物车
                 </button>
-                <button class="btn-buy" @click="buyNow">立即购买</button>
+                <button class="btn-buy" @click="buyNow" :disabled="buying">{{ buying ? '下单中...' : '立即购买' }}</button>
               </div>
               <div class="bc-guarantee">
                 <div v-for="g in guarantees" :key="g" class="bg-item">
@@ -301,17 +239,27 @@
             </div>
             <div class="shop-card">
               <div class="shopcard-head">
-                <div class="shop-avatar">云</div>
+                <div class="shop-avatar">{{ (shopData?.shopName || '云')[0] }}</div>
                 <div class="shop-info">
-                  <p class="shop-name">云梦精选旗舰店</p>
-                  <p class="shop-score">综合评分 <em>4.9</em></p>
+                  <p class="shop-name">{{ shopData?.shopName || '云梦精选旗舰店' }}</p>
+                  <p class="shop-score">综合评分 <em>{{ shopData?.score ?? '4.9' }}</em></p>
                 </div>
-                <button class="shop-follow">关注</button>
+                <button
+                  :class="['shop-follow', { following: isFollowed }]"
+                  :disabled="followLoading"
+                  @click="handleToggleFollow"
+                >{{ followLoading ? '...' : (isFollowed ? '已关注' : '关注') }}</button>
               </div>
               <div class="shop-stats">
-                <div class="ss-item"><span class="ss-num">98.6%</span><span class="ss-label">好评率</span></div>
-                <div class="ss-item"><span class="ss-num">24h</span><span class="ss-label">发货</span></div>
-                <div class="ss-item"><span class="ss-num">15万+</span><span class="ss-label">销量</span></div>
+                <div class="ss-item"><span class="ss-num">{{ shopData?.goodRate ?? '98.6%' }}</span><span class="ss-label">好评率</span></div>
+                <div class="ss-item"><span class="ss-num">{{ shopData?.avgShipTime ?? '24h' }}</span><span class="ss-label">发货</span></div>
+                <div class="ss-item"><span class="ss-num">{{ formatShopCount(shopData?.totalSales) }}</span><span class="ss-label">销量</span></div>
+              </div>
+              <div class="shop-card-footer">
+                <button class="shop-view-btn" @click="goToShop">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  查看店铺
+                </button>
               </div>
             </div>
           </div>
@@ -331,11 +279,15 @@
             <span class="fbb-qty">×{{ qty }}</span>
           </div>
           <div class="fbb-btns">
+            <button class="fbb-fav" @click="handleToggleFavorite" :disabled="favoriting">
+              <svg width="14" height="14" viewBox="0 0 24 24" :fill="isFavorited ? '#E74C3C' : 'none'" :stroke="isFavorited ? '#E74C3C' : 'currentColor'" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+              {{ isFavorited ? '已收藏' : '收藏' }}
+            </button>
             <button class="fbb-cart" @click="addToCart">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
               加入购物车
             </button>
-            <button class="fbb-buy" @click="buyNow">立即购买</button>
+            <button class="fbb-buy" @click="buyNow" :disabled="buying">{{ buying ? '下单中...' : '立即购买' }}</button>
           </div>
         </div>
       </div>
@@ -346,6 +298,10 @@
   import { useRouter, useRoute } from 'vue-router'
   import request from '@/utils/request'
   import { addToCart as addCartItemApi } from '@/api/cart' 
+  import { createOrder } from '@/api/order'
+  import { toggleFavorite, checkFavorite } from '@/api/item'
+  import { getShopDetail, toggleFollowShop, checkFollowShop } from '@/api/shop'
+  import { getComments, postComment, toggleLike, getLikeStatus } from '@/api/remark'
   import { ElMessage } from 'element-plus' 
   import nofoundImage from '@/assets/images/nofound.png'
   
@@ -359,6 +315,15 @@
   
   // ─── 加载状态 ────────────────────────────────────────────────
   const loading = ref(true)
+
+  // ─── 收藏状态 ────────────────────────────────────────────────
+  const isFavorited = ref(false)
+  const favoriting  = ref(false)
+
+  // ─── 店铺状态 ────────────────────────────────────────────────
+  const shopData     = ref(null)
+  const isFollowed   = ref(false)
+  const followLoading = ref(false)
   
   // ─── 后端数据 ────────────────────────────────────────────────
   const itemDetail  = ref(null)
@@ -475,7 +440,10 @@
         if (first) initSpecs[group.specName] = first.value
       }
       selectedSpecs.value = initSpecs
-  
+    
+      // 加载店铺信息
+      loadShopInfo()
+    
     } catch (e) {
       console.error('加载商品详情失败', e)
     } finally {
@@ -485,8 +453,90 @@
   
   onMounted(() => {
     const id = route.params.id || route.query.id
-    if (id) fetchItemDetail(id)
+    if (id) {
+      fetchItemDetail(id)
+      checkFavoriteStatus(id)
+    }
+    // 延迟加载评论，等 itemDetail 就绪
+    setTimeout(() => loadReviews(), 300)
   })
+
+  // 商品详情加载完成后，拉取店铺信息
+  const loadShopInfo = async () => {
+    const shopId = itemDetail.value?.shopId
+    if (!shopId) return
+    try {
+      const res = await getShopDetail(shopId)
+      shopData.value = res.data ?? res
+      // 并行检查关注状态
+      const followRes = await checkFollowShop(shopId)
+      const fd = followRes.data ?? followRes
+      isFollowed.value = fd?.followed ?? fd ?? false
+    } catch {
+      // 店铺信息加载失败不影响商品展示
+    }
+  }
+
+  // ─── 收藏 ────────────────────────────────────────────────────
+  const checkFavoriteStatus = async (itemId) => {
+    try {
+      const res = await checkFavorite(itemId)
+      const data = res.data ?? res
+      isFavorited.value = data?.favorited ?? data ?? false
+    } catch {
+      // 静默失败
+    }
+  }
+
+  const handleToggleFavorite = async () => {
+    if (favoriting.value) return
+    const itemId = itemDetail.value?.id
+    if (!itemId) return
+    favoriting.value = true
+    try {
+      await toggleFavorite(itemId)
+      isFavorited.value = !isFavorited.value
+      ElMessage.success(isFavorited.value ? '已收藏' : '已取消收藏')
+    } catch (err) {
+      ElMessage.error(err.response?.data?.message || '操作失败')
+    } finally {
+      favoriting.value = false
+    }
+  }
+
+  // ─── 关注店铺 ────────────────────────────────────────────────
+  // 销量数字格式化（10000 → 1万+）
+  const formatShopCount = (val) => {
+    if (val == null) return '--'
+    if (val >= 10000) return (val / 10000).toFixed(1).replace(/\.0$/, '') + '万+'
+    return String(val)
+  }
+
+  const handleToggleFollow = async () => {
+    if (followLoading.value) return
+    const shopId = shopData.value?.id || itemDetail.value?.shopId
+    if (!shopId) return
+    followLoading.value = true
+    try {
+      await toggleFollowShop(shopId)
+      isFollowed.value = !isFollowed.value
+      ElMessage.success(isFollowed.value ? '已关注店铺' : '已取消关注')
+    } catch (err) {
+      ElMessage.error(err.response?.data?.message || '操作失败')
+    } finally {
+      followLoading.value = false
+    }
+  }
+
+  // 查看店铺
+  const goToShop = () => {
+    const shopId = shopData.value?.id || itemDetail.value?.shopId
+    if (shopId) {
+      router.push(`/shop/${shopId}`)
+    } else {
+      ElMessage.warning('店铺信息暂不可用')
+    }
+  }
   
   // ─── 加入购物车 / 立即购买 ───────────────────────────────────
   const addToCart = async () => {
@@ -511,61 +561,123 @@
     }
   }
   
-  const buyNow = () => {
+  const buying = ref(false)
+  const buyNow = async () => {
     if (!currentSku.value) { 
       ElMessage.warning('请先选择完整的商品规格')
       return 
     }
-    // 立即购买跳转到结算页（或购物车）
-    router.push({ 
-      path: '/cart', 
-      query: { 
-        skuId: currentSku.value.id, 
-        quantity: qty.value, // 把 num 改为 quantity 保持统一
-        direct: 1 
-      } 
-    })
+    if (buying.value) return
+    
+    try {
+      buying.value = true
+      
+      // 调用后端创建订单
+      const orderDTO = {
+        items: [{
+          skuId: currentSku.value.id,
+          quantity: qty.value
+        }]
+      }
+      
+      console.log('立即购买 - 创建订单参数:', orderDTO)
+      
+      const res = await createOrder(orderDTO)
+      
+      // 后端返回 Result<String>，拦截器解包后 res 就是订单ID
+      const orderId = res.data || res
+      
+      if (!orderId) {
+        ElMessage.error('订单创建失败，请重试')
+        return
+      }
+      
+      console.log('订单创建成功，订单ID:', orderId)
+      ElMessage.success('订单创建成功，正在跳转支付...')
+      
+      // 跳转到支付页面
+      router.push({
+        path: '/pay',
+        query: { orderId }
+      })
+      
+    } catch (err) {
+      console.error('立即购买失败:', err)
+      const errorMsg = err.response?.data?.message || err.response?.data?.msg || err.message || '订单创建失败，请重试'
+      ElMessage.error(errorMsg)
+    } finally {
+      buying.value = false
+    }
   }
 
   
-  // ─── 评论（静态，后续可接接口）──────────────────────────────
+  // ─── 评论（接 ym-remark 服务）──────────────────────────────
   const reviewFilter    = ref('all')
   const activeReviewTag = ref('')
   const onlyWithImg     = ref(false)
   const myRating        = ref(0)
   const hoverRating     = ref(0)
   const myReview        = ref('')
+  const reviewLoading   = ref(false)
   const ratingLabels    = { 0:'', 1:'非常差', 2:'比较差', 3:'一般', 4:'比较好', 5:'非常好' }
   const reviewFilters   = [
     { key:'all', label:'全部' }, { key:'good', label:'好评' },
     { key:'medium', label:'中评' }, { key:'bad', label:'差评' },
   ]
-  const reviewTags = [
-    { label:'音质出色', count:56 }, { label:'降噪效果好', count:43 },
-    { label:'佩戴舒适', count:38 }, { label:'续航强', count:29 },
-    { label:'做工精细', count:24 }, { label:'包装精美', count:18 },
-  ]
-  const ratingDist = [
-    { star:5, pct:78 }, { star:4, pct:14 },
-    { star:3, pct:5  }, { star:2, pct:2  }, { star:1, pct:1 },
-  ]
-  const reviews = ref([
-    { id:1, name:'云***01', sku:'星空黑 / 标准版', rating:5, date:'2026-03-18',
-      text:'音质非常棒，降噪效果超出预期！戴上之后外界噪音几乎消失，地铁里也能安静享受音乐。佩戴舒适，长时间佩戴耳朵不酸。',
-      imgs:['https://picsum.photos/120/120?random=60','https://picsum.photos/120/120?random=61'],
-      tags:['音质出色','降噪效果好'], likes:42, liked:false,
-      shopReply:'感谢您的好评！您的认可是我们前进的动力，期待再次光临～' },
-    { id:2, name:'李***22', sku:'月光白 / 标准版', rating:5, date:'2026-03-15',
-      text:'收到货后第一时间开箱，包装很精致，耳机颜值超高！连接很稳定，续航也很强，性价比完全碾压大牌，值得推荐！',
-      imgs:[], tags:['续航强','做工精细'], likes:28, liked:false, shopReply:'' },
-    { id:3, name:'王***88', sku:'玫瑰金 / 豪华版', rating:4, date:'2026-03-12',
-      text:'整体很满意，音质真的很好，低音有力不发混，人声清晰。客服响应也很快，态度很好。',
-      imgs:['https://picsum.photos/120/120?random=62'],
-      tags:['音质出色'], likes:16, liked:false, shopReply:'' },
-    { id:4, name:'张***55', sku:'星空黑 / 限定版', rating:5, date:'2026-03-10',
-      text:'限定版太好看了！金属质感很强，音质自然不用说，和大牌比一点不差。快递师傅态度也很好，满分好评！',
-      imgs:[], tags:['做工精细','包装精美'], likes:33, liked:false, shopReply:'' },
+
+  const reviews = ref([])
+  const reviewTags = ref([])
+  const ratingDist = ref([
+    { star:5, pct:0 }, { star:4, pct:0 }, { star:3, pct:0 }, { star:2, pct:0 }, { star:1, pct:0 },
   ])
+
+  const loadReviews = async () => {
+    const bizId = itemDetail.value?.id
+    if (!bizId) return
+    reviewLoading.value = true
+    try {
+      const res = await getComments({ bizId, bizType: 'product', pageNo: 1, pageSize: 50 })
+      const pageData = res?.data ?? res
+      const list = Array.isArray(pageData?.list) ? pageData.list : (Array.isArray(pageData) ? pageData : [])
+
+      // 收集所有评论 ID 用于批量查点赞状态
+      const ids = list.map(c => c.id).filter(Boolean)
+      let likedIds = []
+      if (ids.length) {
+        try {
+          likedIds = await getLikeStatus(ids)
+          likedIds = Array.isArray(likedIds) ? likedIds : (likedIds?.data ?? [])
+        } catch { /* 点赞状态加载失败不影响评论展示 */ }
+      }
+
+      reviews.value = list.map(c => ({
+        id: c.id,
+        name: c.userId ? `用户${c.userId}` : '匿名用户',
+        rating: 5, // 后端暂未存评分字段，默认5星
+        date: c.createTime?.split(' ')[0] || '',
+        text: c.content || '',
+        likes: c.likedTimes || 0,
+        liked: likedIds.includes(c.id),
+        replyCount: c.replyCount || 0,
+      }))
+
+      // 重新计算评分分布
+      buildRatingDist()
+    } catch (err) {
+      console.error('[评论] 加载失败:', err)
+    } finally {
+      reviewLoading.value = false
+    }
+  }
+
+  const buildRatingDist = () => {
+    const total = reviews.value.length
+    if (!total) return
+    const dist = { 1:0, 2:0, 3:0, 4:0, 5:0 }
+    reviews.value.forEach(r => { if (dist[r.rating] !== undefined) dist[r.rating]++ })
+    ratingDist.value = [5,4,3,2,1].map(star => ({ star, pct: Math.round(dist[star] / total * 100) }))
+  }
+
   const filteredReviews = computed(() => {
     let list = reviews.value
     if (reviewFilter.value === 'good')   list = list.filter(r => r.rating >= 4)
@@ -574,56 +686,40 @@
     if (onlyWithImg.value)               list = list.filter(r => r.imgs?.length > 0)
     return list
   })
-  const submitReview = () => {
+
+  const avgRating = computed(() => {
+    const total = reviews.value.length
+    if (!total) return '--'
+    const sum = reviews.value.reduce((s, r) => s + (r.rating || 0), 0)
+    return (sum / total).toFixed(1)
+  })
+
+  const handleLike = async (rv) => {
+    try {
+      // POST /likes 返回 void，无异常即成功
+      await toggleLike({ bizId: rv.id, bizType: 'comment', liked: !rv.liked })
+      rv.liked = !rv.liked
+      rv.likes += rv.liked ? 1 : -1
+    } catch (err) {
+      console.error('[点赞] 操作失败:', err)
+    }
+  }
+
+  const submitReview = async () => {
     if (!myReview.value.trim() || !myRating.value) return
-    reviews.value.unshift({
-      id: Date.now(), name:'我', sku: Object.values(selectedSpecs.value).join(' / '),
-      rating: myRating.value, date: new Date().toLocaleDateString('zh-CN'),
-      text: myReview.value, imgs:[], tags:[], likes:0, liked:false, shopReply:'',
-    })
-    myReview.value = ''; myRating.value = 0
-    alert('评价发布成功！')
-  }
-  
-  // ─── 问答（静态，后续可接接口）──────────────────────────────
-  const myQuestion = ref('')
-  const isAnon     = ref(false)
-  const qaList     = ref([
-    { id:1, question:'这款耳机的降噪效果怎么样？地铁上用能明显感受到吗？',
-      user:'购买者A', isAnon:false, date:'2026-03-10', views:328, showReply:false, replyText:'',
-      answers:[
-        { id:1, user:'官方客服', isShop:true,  date:'2026-03-10', text:'您好！本产品支持主动降噪（ANC），降噪深度高达35dB，地铁飞机等场景效果非常明显，可以完全沉浸在音乐中。', likes:24, liked:false },
-        { id:2, user:'云***01', isShop:false, date:'2026-03-11', text:'我已经用了两周了，在地铁上效果非常明显，基本听不到列车噪音，强烈推荐！', likes:18, liked:false },
-      ]},
-    { id:2, question:'续航到底有多久？官方说的90小时是怎么算的？',
-      user:'匿名用户', isAnon:true, date:'2026-03-08', views:215, showReply:false, replyText:'',
-      answers:[
-        { id:1, user:'官方客服', isShop:true, date:'2026-03-08', text:'您好！90小时=耳机本身30h+充电盒额外2次补充，共3×30=90小时总续航。支持10分钟快充=3小时使用。', likes:31, liked:false },
-      ]},
-    { id:3, question:'支持多设备同时连接吗？手机和电脑能同时用？',
-      user:'李***22', isAnon:false, date:'2026-03-05', views:187, showReply:false, replyText:'',
-      answers:[
-        { id:1, user:'官方客服', isShop:true, date:'2026-03-05', text:'支持多点连接，最多同时配对2台设备，切换非常方便，接听电话时会自动切换到手机。', likes:19, liked:false },
-        { id:2, user:'王***88', isShop:false, date:'2026-03-06', text:'我就是手机+MacBook同时连接，切换很流畅，没有延迟。', likes:12, liked:false },
-      ]},
-  ])
-  const submitQuestion = () => {
-    if (!myQuestion.value.trim()) return
-    qaList.value.unshift({
-      id: Date.now(), question: myQuestion.value, user:'我', isAnon: isAnon.value,
-      date: new Date().toLocaleDateString('zh-CN'), views:1, showReply:false, replyText:'', answers:[],
-    })
-    myQuestion.value = ''
-    alert('问题提交成功，等待商家或其他买家解答！')
-  }
-  const submitAnswer = (qa) => {
-    if (!qa.replyText?.trim()) return
-    qa.answers.push({
-      id: Date.now(), user:'我', isShop:false,
-      date: new Date().toLocaleDateString('zh-CN'),
-      text: qa.replyText, likes:0, liked:false,
-    })
-    qa.replyText = ''; qa.showReply = false
+    const bizId = itemDetail.value?.id
+    if (!bizId) return
+    try {
+      // POST /comments 返回 void，无异常即成功
+      await postComment({ bizId, bizType: 'product', content: myReview.value })
+      ElMessage.success('评价发布成功！')
+      myReview.value = ''; myRating.value = 0
+      // 重新加载评论列表
+      loadReviews()
+    } catch (err) {
+      console.error('[评论] 发布失败:', err)
+      ElMessage.error(err.response?.data?.message || '发布失败，请重试')
+    }
   }
   
   const guarantees = ['正品保障·假一赔十','7天无理由退换','全程运费险','1年质保']
@@ -738,9 +834,8 @@
   .ri-foot { display: flex; align-items: center; gap: 12px; }
   .ri-like { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #8A8070; background: none; border: 1px solid #E0D8C8; padding: 4px 10px; border-radius: 100px; cursor: pointer; transition: .2s; font-family: inherit; }
   .ri-like:hover { border-color: #C9A84C; color: #A07830; }
-  .ri-shop-reply { margin-top: 10px; background: #FAFAF8; border: 1px solid #E0D8C8; border-radius: 8px; padding: 10px 14px; font-size: 12px; line-height: 1.6; }
-  .sr-label { color: #A07830; font-weight: 500; }
-  .sr-text  { color: #4A4438; }
+  .ri-reply-hint { font-size: 12px; color: #A07830; cursor: pointer; }
+  .ri-reply-hint:hover { text-decoration: underline; }
   .write-review { padding: 20px; border-top: 1px solid #F0EAE0; background: #FAFAF8; }
   .wr-head { font-size: 14px; font-weight: 500; color: #1A1A18; margin-bottom: 12px; }
   .wr-stars { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; }
@@ -755,54 +850,6 @@
   .wr-count { font-size: 11px; color: #B0A898; }
   .wr-submit { padding: 9px 22px; border-radius: 100px; border: none; background: linear-gradient(135deg, #A07830, #C9A84C); color: #FFF; font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer; transition: .2s; }
   .wr-submit:disabled { background: #E0D8C8; color: #B0A898; cursor: not-allowed; }
-  
-  /* ══ 问答 ══ */
-  .ask-box { padding: 20px; border-bottom: 1px solid #F0EAE0; background: #FAFAF8; }
-  .ab-head { font-size: 14px; font-weight: 500; color: #1A1A18; margin-bottom: 12px; }
-  .ab-textarea { width: 100%; min-height: 80px; border: 1.5px solid #E0D8C8; border-radius: 10px; padding: 12px 14px; resize: vertical; font-family: inherit; font-size: 13px; color: #1A1A18; background: #FFF; outline: none; transition: .2s; line-height: 1.6; }
-  .ab-textarea:focus { border-color: #C9A84C; }
-  .ab-textarea::placeholder { color: #B0A898; }
-  .ab-foot { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
-  .ab-anon { display: flex; align-items: center; gap: 7px; cursor: pointer; font-size: 12px; color: #4A4438; }
-  .ab-anon-real { display: none; }
-  .ab-anon-box { width: 15px; height: 15px; border-radius: 4px; border: 1.5px solid #C9A84C; background: transparent; position: relative; transition: .2s; flex-shrink: 0; }
-  .ab-anon-real:checked + .ab-anon-box { background: #C9A84C; }
-  .ab-anon-real:checked + .ab-anon-box::after { content: '✓'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 9px; color: #FFF; font-weight: 700; }
-  .ab-count { font-size: 11px; color: #B0A898; margin-left: auto; }
-  .ab-submit { padding: 8px 20px; border-radius: 100px; border: none; background: linear-gradient(135deg, #A07830, #C9A84C); color: #FFF; font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer; transition: .2s; }
-  .ab-submit:disabled { background: #E0D8C8; color: #B0A898; cursor: not-allowed; }
-  .qa-list { padding: 16px 20px; display: flex; flex-direction: column; gap: 20px; }
-  .qa-item { border-bottom: 1px solid #F5F2EC; padding-bottom: 20px; }
-  .qa-item:last-child { border-bottom: none; padding-bottom: 0; }
-  .qa-question { display: flex; gap: 12px; margin-bottom: 14px; }
-  .qa-q-icon { width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0; background: rgba(201,168,76,0.12); border: 1px solid rgba(201,168,76,0.3); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #A07830; }
-  .qa-q-body { flex: 1; }
-  .qa-q-text { font-size: 14px; font-weight: 500; color: #1A1A18; line-height: 1.5; margin-bottom: 6px; }
-  .qa-q-meta { display: flex; align-items: center; gap: 10px; }
-  .qa-q-user, .qa-q-date, .qa-q-views { font-size: 11px; color: #B0A898; }
-  .qa-answers { display: flex; flex-direction: column; gap: 10px; padding-left: 40px; }
-  .qa-answer  { display: flex; gap: 10px; }
-  .qa-a-icon { width: 26px; height: 26px; border-radius: 7px; flex-shrink: 0; background: #F5F2EC; border: 1px solid #E0D8C8; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #4A4438; }
-  .qa-a-icon.shop { background: rgba(201,168,76,0.12); border-color: rgba(201,168,76,0.35); color: #A07830; }
-  .qa-a-body { flex: 1; }
-  .qa-a-head { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
-  .qa-a-user { font-size: 12px; font-weight: 500; color: #4A4438; }
-  .qa-a-user.shop { color: #A07830; }
-  .qa-a-date { font-size: 11px; color: #B0A898; }
-  .qa-a-like { display: flex; align-items: center; gap: 4px; margin-left: auto; font-size: 11px; color: #8A8070; background: none; border: 1px solid #E0D8C8; padding: 3px 9px; border-radius: 100px; cursor: pointer; transition: .2s; font-family: inherit; }
-  .qa-a-like:hover { border-color: #C9A84C; color: #A07830; }
-  .qa-a-text { font-size: 13px; color: #4A4438; line-height: 1.7; }
-  .qa-reply-area { margin-top: 8px; }
-  .qa-reply-input { width: 100%; min-height: 70px; border: 1.5px solid #E0D8C8; border-radius: 8px; padding: 10px 12px; resize: vertical; font-family: inherit; font-size: 13px; color: #1A1A18; background: #FFF; outline: none; transition: .2s; }
-  .qa-reply-input:focus { border-color: #C9A84C; }
-  .qa-reply-input::placeholder { color: #B0A898; }
-  .qa-reply-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
-  .qa-reply-cancel { padding: 7px 16px; border-radius: 100px; background: #FFF; border: 1px solid #E0D8C8; color: #4A4438; font-family: inherit; font-size: 12px; cursor: pointer; }
-  .qa-reply-cancel:hover { border-color: #C9A84C; color: #A07830; }
-  .qa-reply-submit { padding: 7px 16px; border-radius: 100px; border: none; background: linear-gradient(135deg, #A07830, #C9A84C); color: #FFF; font-family: inherit; font-size: 12px; cursor: pointer; }
-  .qa-reply-submit:disabled { background: #E0D8C8; color: #B0A898; cursor: not-allowed; }
-  .qa-answer-btn { margin-top: 8px; font-size: 12px; color: #A07830; background: rgba(201,168,76,0.06); border: 1px solid rgba(201,168,76,0.3); padding: 6px 14px; border-radius: 100px; cursor: pointer; font-family: inherit; }
-  .qa-answer-btn:hover { background: rgba(201,168,76,0.12); }
   
   /* ══ 购买栏（右侧卡片内） ══ */
   .buy-card { background: #FFF; border: 1px solid #E0D8C8; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(201,168,76,0.1); flex-shrink: 0; }
@@ -854,7 +901,16 @@
   .bp-item  { display: flex; flex-direction: column; gap: 2px; background: #FAFAF8; border-radius: 7px; padding: 8px 10px; }
   .bp-key   { font-size: 10px; color: #8A8070; }
   .bp-val   { font-size: 12px; color: #1A1A18; line-height: 1.4; }
-  .bc-btns { padding: 14px 20px; display: flex; gap: 10px; }
+  .bc-btns { padding: 14px 20px; display: flex; gap: 8px; }
+  .btn-fav {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 11px 10px; border-radius: 10px;
+    border: 1.5px solid #E0D8C8; background: #FFF;
+    color: #4A4438; font-family: inherit; font-size: 12px; font-weight: 500;
+    cursor: pointer; transition: .2s; white-space: nowrap; flex-shrink: 0;
+  }
+  .btn-fav:hover:not(:disabled) { border-color: #E74C3C; color: #E74C3C; background: rgba(231,76,60,0.04); }
+  .btn-fav:disabled { opacity: .6; cursor: not-allowed; }
   .btn-cart { flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px; padding: 11px; border-radius: 10px; border: 2px solid #C9A84C; background: rgba(201,168,76,0.06); color: #A07830; font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer; transition: .2s; }
   .btn-cart:hover { background: rgba(201,168,76,0.14); }
   .btn-buy  { flex: 1; padding: 11px; border-radius: 10px; border: none; background: linear-gradient(135deg, #A07830, #C9A84C); color: #FFF; font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer; transition: .2s; }
@@ -871,12 +927,25 @@
   .shop-score { font-size: 12px; color: #8A8070; }
   .shop-score em { font-style: normal; color: #A07830; font-weight: 600; }
   .shop-follow { padding: 7px 14px; border-radius: 100px; border: 1.5px solid #C9A84C; background: rgba(201,168,76,0.06); color: #A07830; font-family: inherit; font-size: 12px; font-weight: 500; cursor: pointer; transition: .2s; }
-  .shop-follow:hover { background: rgba(201,168,76,0.14); }
+  .shop-follow:hover:not(:disabled) { background: rgba(201,168,76,0.14); }
+  .shop-follow:disabled { opacity: .6; cursor: not-allowed; }
+  .shop-follow.following { background: #FFF; color: #8A8070; border-color: #E0D8C8; }
   .shop-stats { display: grid; grid-template-columns: repeat(3,1fr); border-top: 1px solid #F0EAE0; padding-top: 12px; }
   .ss-item { display: flex; flex-direction: column; align-items: center; gap: 3px; border-right: 1px solid #F0EAE0; }
   .ss-item:last-child { border-right: none; }
   .ss-num   { font-size: 16px; font-weight: 600; color: #A07830; font-family: 'Space Mono', monospace; }
   .ss-label { font-size: 11px; color: #8A8070; }
+  
+  /* 查看店铺 */
+  .shop-card-footer { padding: 0 18px 16px; }
+  .shop-view-btn {
+    width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 10px; border-radius: 10px;
+    border: 1.5px solid #E0D8C8; background: #FAFAF8;
+    color: #4A4438; font-family: inherit; font-size: 13px; font-weight: 500;
+    cursor: pointer; transition: .2s;
+  }
+  .shop-view-btn:hover { border-color: #C9A84C; color: #A07830; background: rgba(201,168,76,0.06); }
   
   /* ══ 底部固定购买栏（全端常驻）══ */
   .floating-buy-bar {
@@ -902,6 +971,15 @@
   .fbb-spec-text { font-size: 12px; color: #8A8070; }
   .fbb-qty   { font-size: 12px; color: #4A4438; background: #F5F2EC; border: 1px solid #E0D8C8; padding: 2px 8px; border-radius: 4px; }
   .fbb-btns  { display: flex; gap: 10px; flex-shrink: 0; }
+  .fbb-fav {
+    display: flex; align-items: center; gap: 6px;
+    padding: 11px 18px; border-radius: 100px;
+    border: 1.5px solid #E0D8C8; background: #FFF;
+    color: #4A4438; font-family: inherit; font-size: 14px; font-weight: 500;
+    cursor: pointer; transition: .2s; white-space: nowrap;
+  }
+  .fbb-fav:hover:not(:disabled) { border-color: #E74C3C; color: #E74C3C; }
+  .fbb-fav:disabled { opacity: .6; cursor: not-allowed; }
   .fbb-cart  {
     display: flex; align-items: center; gap: 7px;
     padding: 11px 24px; border-radius: 100px;

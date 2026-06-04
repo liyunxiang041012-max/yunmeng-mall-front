@@ -72,6 +72,24 @@ const routes = [
     component: () => import('@/views/MessagePage.vue'),
     meta: { requireAuth: true }   // ← 需要登录
   },
+  {
+    path: '/ai',
+    name: 'AiAssistant',
+    component: () => import('@/views/AiAssistant.vue'),
+    meta: { requireAuth: true }   // ← 需要登录
+  },
+  {
+    path: '/coupon',
+    name: 'Coupon',
+    component: () => import('@/views/Coupon.vue'),
+    meta: { requireAuth: true }   // ← 需要登录
+  },
+  {
+    path: '/shop/:id',
+    name: 'Shop',
+    component: () => import('@/views/Shop.vue'),
+    meta: { requireAuth: true }   // ← 需要登录
+  },
 
   // ══════════════════════════════════════════
   // ★ 后期新增页面参考：
