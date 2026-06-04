@@ -37,3 +37,8 @@ __screenshots__/
 
 # Vite
 *.timestamp-*-*.mjs
+
+# Node.js compile cache (temp files)
+%USERP~1/
+%USERPROFILE%/
+node-compile-cache/
