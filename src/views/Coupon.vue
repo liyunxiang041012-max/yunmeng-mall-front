@@ -195,7 +195,7 @@ const handleRedeem = async () => {
     redeemCode.value = ''
     loadMyCoupons()
   } catch (err) {
-    ElMessage.error(err.response?.data?.message || '兑换失败，请检查兑换码')
+    ElMessage.error(err.message || '兑换失败，请检查兑换码')
   } finally {
     redeeming.value = false
   }
@@ -277,7 +277,7 @@ const handleClaim = async (id) => {
     availableCoupons.value.forEach(c => { if (c.id === id) c.claimed = true })
     loadMyCoupons()
   } catch (err) {
-    ElMessage.error(err.response?.data?.message || '领取失败')
+    ElMessage.error(err.message || '领取失败')
   }
 }
 

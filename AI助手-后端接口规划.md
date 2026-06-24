@@ -276,3 +276,4 @@ public class AiChatService {
 | Shop.vue "联系客服" 按钮删除 | ✅ 已完成 |
 | HomePage.vue AI 浮窗删除 + 跳转 | ✅ 已完成 |
 | 后端服务启动后联调 | ⬜ 待进行 |
+对接一定要写md

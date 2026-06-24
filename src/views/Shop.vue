@@ -196,7 +196,7 @@ const handleToggleFollow = async () => {
     isFollowed.value = !isFollowed.value
     ElMessage.success(isFollowed.value ? '已关注' : '已取消关注')
   } catch (err) {
-    ElMessage.error(err.response?.data?.message || '操作失败')
+    ElMessage.error(err.message || '操作失败')
   } finally {
     followLoading.value = false
   }

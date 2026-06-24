@@ -498,7 +498,7 @@
       isFavorited.value = !isFavorited.value
       ElMessage.success(isFavorited.value ? '已收藏' : '已取消收藏')
     } catch (err) {
-      ElMessage.error(err.response?.data?.message || '操作失败')
+      ElMessage.error(err.message || '操作失败')
     } finally {
       favoriting.value = false
     }
@@ -522,7 +522,7 @@
       isFollowed.value = !isFollowed.value
       ElMessage.success(isFollowed.value ? '已关注店铺' : '已取消关注')
     } catch (err) {
-      ElMessage.error(err.response?.data?.message || '操作失败')
+      ElMessage.error(err.message || '操作失败')
     } finally {
       followLoading.value = false
     }
@@ -584,26 +584,29 @@
       
       const res = await createOrder(orderDTO)
       
-      // 后端返回 Result<String>，拦截器解包后 res 就是订单ID
-      const orderId = res.data || res
+      // 后端返回 Result<CreateOrderVO>，拦截器解包后 res.data = { orderId, expireTime }
+      const result = res.data || res
+      // result 可能是字符串(orderId)或对象({orderId, expireTime})
+      const orderId = typeof result === 'string' ? result : result.orderId
+      const expireTime = typeof result === 'object' ? result.expireTime : ''
       
       if (!orderId) {
         ElMessage.error('订单创建失败，请重试')
         return
       }
       
-      console.log('订单创建成功，订单ID:', orderId)
+      console.log('订单创建成功，订单ID:', orderId, '过期时间:', expireTime)
       ElMessage.success('订单创建成功，正在跳转支付...')
       
-      // 跳转到支付页面
+      // 跳转到支付页面，传递订单ID和过期时间
       router.push({
         path: '/pay',
-        query: { orderId }
+        query: { orderId, expireTime }
       })
       
     } catch (err) {
       console.error('立即购买失败:', err)
-      const errorMsg = err.response?.data?.message || err.response?.data?.msg || err.message || '订单创建失败，请重试'
+      const errorMsg = err.message || err.response?.data?.msg || err.message || '订单创建失败，请重试'
       ElMessage.error(errorMsg)
     } finally {
       buying.value = false
@@ -718,7 +721,7 @@
       loadReviews()
     } catch (err) {
       console.error('[评论] 发布失败:', err)
-      ElMessage.error(err.response?.data?.message || '发布失败，请重试')
+      ElMessage.error(err.message || '发布失败，请重试')
     }
   }
   

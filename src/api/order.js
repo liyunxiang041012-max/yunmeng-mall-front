@@ -4,7 +4,7 @@ import request from '../utils/request'
  * 创建订单
  * @param {Object} data - 订单数据
  * @param {Array} data.items - 订单项列表 [{skuId, quantity}]
- * @returns {Promise} 返回订单ID
+ * @returns {Promise} 返回 { orderId, expireTime } 或 orderId 字符串
  */
 export const createOrder = (data) => request.post('/py/order/create', data)
 

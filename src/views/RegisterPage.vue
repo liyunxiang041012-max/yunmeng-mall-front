@@ -41,6 +41,15 @@
               show-password
             />
           </el-form-item>
+
+          <el-form-item prop="nickname">
+            <el-input
+              v-model="registerForm.nickname"
+              placeholder="请输入昵称"
+              prefix-icon="User"
+              size="large"
+            />
+          </el-form-item>
           
           <el-form-item prop="confirmPassword">
             <el-input
@@ -77,7 +86,7 @@
   import { ref, reactive } from 'vue'
   import { useRouter } from 'vue-router'
   import { ElMessage } from 'element-plus'
-  import { register,sendSmsCode } from '@/api/user'  // ← 引入真实接口
+  import { register, sendSmsCode as apiSendSms, login } from '@/api/user'  // ← 引入真实接口
   
   const router = useRouter()
   const registerFormRef = ref()
@@ -87,23 +96,23 @@
     phone: '',        // ← 改成手机号
     password: '',
     confirmPassword: '',
-    nickname: ''      // ← 昵称（可选）
+    nickname: ''      // ← 昵称
   })
   
-const sendSmsCode = async () => {
+const doSendSms = async () => {
   // 先验证手机号格式
   try {
     await registerFormRef.value.validateField('phone')
   } catch {
-    return  // 手机号格式不对，直接拦截
+    return
   }
 
   // 手机号格式正确，请求后端发验证码
   try {
-    await sendSmsCode({ phone: registerForm.phone })  // ← 调后端接口
+    const res = await apiSendSms({ phone: registerForm.phone })
+    // 成功才走到这里
     ElMessage.success('验证码已发送')
 
-    // 倒计时60秒，防止重复点击
     countdown.value = 60
     const timer = setInterval(() => {
       countdown.value--
@@ -111,9 +120,8 @@ const sendSmsCode = async () => {
         clearInterval(timer)
       }
     }, 1000)
-
   } catch (err) {
-    ElMessage.error(err.response?.data?.message || '发送失败，请重试')
+    ElMessage.error('验证码发送失败，请稍后重试')
   }
 }
   // 手机号格式验证
@@ -163,6 +171,7 @@ const validatePassword = (rule, value, callback) => {
       { validator: validateConfirmPassword, trigger: 'blur' }
     ],
     nickname: [
+      { required: true, message: '请输入昵称', trigger: 'blur' },
       { max: 20, message: '昵称最多20个字符', trigger: 'blur' }
     ]
   }
@@ -174,22 +183,24 @@ const validatePassword = (rule, value, callback) => {
       await registerFormRef.value.validate()
       loading.value = true
   
+      // 👇 清掉旧 token，防止注册请求带上已登录商家的身份
+      localStorage.removeItem('token')
+      
       // 调用真实注册接口
-      const res = await register({
+      await register({
         phone: registerForm.phone,
         password: registerForm.password,
-        nickname: registerForm.nickname || ''
+        nickname: registerForm.nickname
       })
-  
-      localStorage.setItem('token', res.token)
+      
+      // 后端注册接口返回 data: null，需调 login 获取 token
+      const loginRes = await login({ account: registerForm.phone, password: registerForm.password })
+      localStorage.setItem('token', loginRes.token)
       ElMessage.success('注册成功！')
-      router.push('/home')  // 注册成功直接去首页
+      router.push('/profile/setup')
   
     } catch (err) {
-      // 表单验证失败会走这里，接口失败也走这里
-      if (err.response?.data?.message) {
-        ElMessage.error(err.response.data.message)
-      }
+      ElMessage.error('注册失败，该手机号可能已注册')
     } finally {
       loading.value = false
     }
@@ -200,14 +211,19 @@ const sendCode = async () => {
   try {
     await registerFormRef.value.validateField('phone')
   } catch {
-    // 手机号格式不对，直接return，不发验证码
     return
   }
 
   // 手机号格式正确，发验证码
-  // await sendSmsCode({ phone: registerForm.phone })
-  ElMessage.success('验证码已发送')
-  
+  try {
+    const res = await apiSendSms({ phone: registerForm.phone })
+    // 成功才走到这里
+    ElMessage.success('验证码已发送')
+  } catch (err) {
+    ElMessage.error('验证码发送失败，请稍后重试')
+    return
+  }
+
   // 倒计时60秒
   countdown.value = 60
   const timer = setInterval(() => {

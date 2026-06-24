@@ -194,10 +194,7 @@
                 <span class="pr-red">优惠券抵扣</span>
                 <span class="pr-red">−¥{{ appliedCoupon.discount }}</span>
               </div>
-              <div class="pr-row">
-                <span>运费</span>
-                <span :class="{ 'pr-green': shippingFee === 0 }">{{ shippingFee === 0 ? '免运费' : '¥' + shippingFee }}</span>
-              </div>
+
               <div class="pr-row pr-saved" v-if="savedAmount > 0">
                 <span>已省</span>
                 <span>¥{{ savedAmount.toFixed(2) }}</span>
@@ -353,9 +350,9 @@ const totalCount = computed(() => cartItems.value.reduce((s, i) => s + i.qty, 0)
 const selectedItems = computed(() => cartItems.value.filter(i => i.selected))
 const selectedCount = computed(() => selectedItems.value.reduce((s, i) => s + i.qty, 0))
 const subtotal = computed(() => selectedItems.value.reduce((s, i) => s + i.price * i.qty, 0))
-const shippingFee = computed(() => subtotal.value >= 199 || subtotal.value === 0 ? 0 : 12)
+const shippingFee = computed(() => 0)
 const couponDiscount = computed(() => !appliedCoupon.value ? 0 : subtotal.value >= appliedCoupon.value.minOrder ? appliedCoupon.value.discount : 0)
-const finalPrice = computed(() => Math.max(0, subtotal.value - couponDiscount.value + shippingFee.value))
+const finalPrice = computed(() => Math.max(0, subtotal.value - couponDiscount.value))
 const savedAmount = computed(() => {
   const orig = selectedItems.value.reduce((s, i) => s + (i.originalPrice || i.price) * i.qty, 0)
   return orig - subtotal.value + couponDiscount.value
@@ -514,20 +511,22 @@ const checkout = async () => {
     // 调用后端创建订单接口
     const res = await createOrder(orderDTO)
     
-    // 后端返回 Result<String>,经过拦截器后 res 就是订单ID字符串
-    const orderId = res.data || res
+    // 后端返回 Result<CreateOrderVO>，拦截器解包后 res.data = { orderId, expireTime }
+    const result = res.data || res
+    const orderId = typeof result === 'string' ? result : result.orderId
+    const expireTime = typeof result === 'object' ? result.expireTime : ''
     
     if (!orderId) {
       ElMessage.error('订单创建失败,请重试')
       return
     }
 
-    console.log('订单创建成功,订单ID:', orderId)
+    console.log('订单创建成功,订单ID:', orderId, '过期时间:', expireTime)
 
-    // 跳转到支付页面,只传订单ID
+    // 跳转到支付页面
     router.push({
       path: '/pay',
-      query: { orderId }
+      query: { orderId, expireTime }
     })
 
   } catch (err) {
@@ -536,7 +535,7 @@ const checkout = async () => {
       return // 用户取消,不显示错误
     }
     console.error('创建订单失败:', err)
-    const errorMsg = err.response?.data?.message || err.response?.data?.msg || err.message || '订单创建失败,请重试'
+    const errorMsg = err.message || err.response?.data?.msg || err.message || '订单创建失败,请重试'
     ElMessage.error(errorMsg)
   }
 }

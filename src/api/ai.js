@@ -20,3 +20,10 @@ export const getAiHistory = (sessionId) => request.get('/ai/history', { params: 
  * @returns {Promise}
  */
 export const clearAiHistory = (sessionId) => request.delete('/ai/history/clear', { params: { sessionId } })
+
+/**
+ * AI 辅助商品审核
+ * @param {Object} data - { name, price, stock }
+ * @returns {Promise} - { code, data: { suggestion, reason } }
+ */
+export const aiReviewItem = (data) => request.post('/ai/review/item', data)

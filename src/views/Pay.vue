@@ -334,22 +334,21 @@ const guarantees = [
   { icon: '💬', label: '在线客服' },
 ]
 
-// ================= 30分钟超时倒计时 =================
+// ================= 倒计时（基于后端返回的 expireTime） =================
 const countdown = ref('')
 const orderExpired = ref(false)
 let countdownTimer = null
 let statusPollTimer = null
 
-const startCountdown = (createTime) => {
-  if (!createTime) return
-  const createDate = new Date(createTime.replace(/-/g, '/'))
-  if (isNaN(createDate.getTime())) return
-
-  const deadline = new Date(createDate.getTime() + 30 * 60 * 1000) // 30分钟
+const startCountdown = (expireTime) => {
+  if (!expireTime) return
+  // 兼容 "2026-06-18 16:09:56" 和 "2026-06-18T16:09:57" 两种格式
+  const expireDate = new Date(expireTime.replace(/-/g, '/').replace('T', ' '))
+  if (isNaN(expireDate.getTime())) return
 
   const tick = () => {
     const now = Date.now()
-    const remaining = deadline - now
+    const remaining = expireDate.getTime() - now
     if (remaining <= 0) {
       countdown.value = '00:00'
       orderExpired.value = true
@@ -419,7 +418,8 @@ const loadPayData = async () => {
     }
     
     const totalAmountFen = orderData.totalAmount ?? calculatedTotalAmount
-    const payAmountFen = orderData.payAmount ?? orderData.totalAmount ?? calculatedTotalAmount
+    // payAmount 可能为 0（后端未设置），此时应回退到 totalAmount
+    const payAmountFen = (orderData.payAmount != null && orderData.payAmount !== 0) ? orderData.payAmount : totalAmountFen
     const discountAmountFen = orderData.discountAmount ?? 0
     
     if (!orderRes.data && calculatedTotalAmount === 0) {
@@ -452,8 +452,10 @@ const loadPayData = async () => {
     // 加载用户地址列表
     await loadAddresses()
 
-    // 启动30分钟倒计时
-    startCountdown(orderData.createTime)
+    // 启动倒计时（优先用后端 expireTime，其次用路由参数兜底）
+    const et = orderData.expireTime || route.query.expireTime
+    console.log('[支付页] expireTime 来源:', orderData.expireTime ? 'orderDetail' : route.query.expireTime ? 'route query' : '无', '值:', et)
+    startCountdown(et)
     // 每10秒轮询订单状态（检测超时取消）
     pollOrderStatus(orderId)
 
@@ -580,7 +582,7 @@ const submitNewAddress = async () => {
     }
   } catch (err) {
     console.error('添加地址失败:', err)
-    ElMessage.error(err.response?.data?.message || '添加地址失败')
+    ElMessage.error(err.message || '添加地址失败')
   } finally {
     addrSubmitting.value = false
   }
@@ -634,21 +636,8 @@ const handlePay = async () => {
     
     console.log('支付接口返回:', res)
     
-    // 检查后端业务状态码（响应拦截器已解包 res.data，res 就是后端 Result 对象）
-    // 后端可能返回 {code, data, msg} 或直接返回数据
-    if (res && typeof res === 'object' && 'code' in res) {
-      // 后端返回了 Result 包装格式
-      if (res.code !== 200 && res.code !== 0 && res.code !== '200') {
-        // 业务失败
-        const errMsg = res.msg || res.message || '支付创建失败'
-        ElMessage.error(errMsg)
-        return
-      }
-    }
-    
-    // 从响应中提取 payNo（后端可能返回 payNo、id 或完整支付对象）
-    const payResult = (res && typeof res === 'object' && 'data' in res) ? res.data : res
-    const payNo = payResult?.payNo || payResult?.id || payResult
+    // 拦截器已处理 code !== 200，走到这里即成功，res = business data
+    const payNo = res?.payNo || res?.id || res
     
     if (!payNo) {
       ElMessage.error('支付单号缺失，无法完成回调')
@@ -662,14 +651,7 @@ const handlePay = async () => {
       const cbRes = await payCallback(payNo)
       console.log('支付回调返回:', cbRes)
       
-      // 回调也可能返回 Result 包装
-      if (cbRes && typeof cbRes === 'object' && 'code' in cbRes) {
-        if (cbRes.code !== 200 && cbRes.code !== 0 && cbRes.code !== '200') {
-          const errMsg = cbRes.msg || cbRes.message || '支付回调失败，请联系客服'
-          ElMessage.warning(errMsg)
-          return
-        }
-      }
+      // 拦截器已处理 code !== 200，走到这里即成功
     } catch (cbErr) {
       console.error('支付回调接口失败:', cbErr)
       ElMessage.warning('支付回调失败，订单状态可能未更新，请联系客服')

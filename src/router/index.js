@@ -18,10 +18,36 @@ const routes = [
     // 登录页，不需要登录，不加 meta
   },
   {
+    path: '/admin',
+    name: 'AdminLogin',
+    component: () => import('@/views/AdminLogin.vue')
+    // 商城管理员登录页，不需要登录，不加 meta
+  },
+  {
+    path: '/admin/dashboard',
+    name: 'AdminDashboard',
+    component: () => import('@/views/AdminDashboard.vue'),
+    meta: { requireAuth: true, hideGlobalNav: true }
+    // 商城管理后台首页，需要登录
+  },
+  {
     path: '/register',
     name: 'Register',
     component: LoginPage
     // 注册页，不需要登录，不加 meta
+  },
+  {
+    path: '/shop/register',
+    name: 'ShopRegister',
+    component: () => import('@/views/ShopRegister.vue')
+    // 商家入驻注册页，不需要登录，不加 meta
+  },
+  {
+    path: '/profile/setup',
+    name: 'ProfileSetup',
+    component: () => import('@/views/ProfileSetup.vue'),
+    meta: { requireAuth: true }
+    // 注册后完善个人信息
   },
   {
     path: '/home',
@@ -70,7 +96,13 @@ const routes = [
     path: '/message',
     name: 'Message',
     component: () => import('@/views/MessagePage.vue'),
-    meta: { requireAuth: true }   // ← 需要登录
+    meta: { requireAuth: true }
+  },
+  {
+    path: '/notice',
+    name: 'Notice',
+    component: () => import('@/views/NoticePage.vue'),
+    meta: { requireAuth: true }
   },
   {
     path: '/ai',
@@ -83,6 +115,27 @@ const routes = [
     name: 'Coupon',
     component: () => import('@/views/Coupon.vue'),
     meta: { requireAuth: true }   // ← 需要登录
+  },
+  {
+    path: '/shop/setup',
+    name: 'ShopSetup',
+    component: () => import('@/views/ShopSetup.vue'),
+    meta: { requireAuth: true, hideGlobalNav: true }
+    // 商家首次登录后设置店铺信息
+  },
+  {
+    path: '/shop/dashboard',
+    name: 'ShopDashboard',
+    component: () => import('@/views/ShopDashboard.vue'),
+    meta: { requireAuth: true, hideGlobalNav: true }
+    // 商家后台首页
+  },
+  {
+    path: '/shop/notice',
+    name: 'ShopNotice',
+    component: () => import('@/views/ShopNotice.vue'),
+    meta: { requireAuth: true, hideGlobalNav: true }
+    // 商家系统公告页
   },
   {
     path: '/shop/:id',

@@ -72,6 +72,10 @@
           </div>
           <div class="order-footer">
             <span class="order-total">共{{ order.totalQty }}件 · 实付 <strong>¥{{ order.total }}</strong></span>
+            <span v-if="order.status==='待付款' && orderCountdowns[order.id]"
+              :class="['order-countdown', { 'od-expired': orderExpiredMap[order.id] }]">
+              ⏱ {{ orderCountdowns[order.id] }}
+            </span>
             <div class="order-actions">
               <button v-if="order.status==='待付款'" class="oa-primary" @click="$router.push(`/pay?orderId=${order.id}`)">立即付款</button>
               <button v-if="order.status==='待收货'" class="oa-default">确认收货</button>
@@ -331,10 +335,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { getUserDetail, getMyAddresses, addAddress, setDefaultAddress, updateAddress, deleteAddress, uploadAvatar } from '../api/user'
+import { getUserDetail, getMyAddresses, addAddress, setDefaultAddress, updateAddress, deleteAddress, uploadAvatar, getUnreadNoticeCount } from '../api/user'
 import { getUserOrders, getOrderItems } from '../api/order'
 import { getMyFavorites, toggleFavorite, getBrowseHistory, deleteBrowseHistory, clearBrowseHistory } from '../api/item'
 import { getMyCoupons } from '../api/coupon'
@@ -377,34 +381,22 @@ const handleAvatarUpload = async (e) => {
   }
   try {
     avatarUploading.value = true
-    // 拦截器已做 res => res.data，所以 res = 后端 Result 对象 {code, data, msg}
-    const res = await uploadAvatar(file)
-    console.log('[头像上传] 原始响应:', JSON.stringify(res))
+    const avatarUrl = await uploadAvatar(file)
+    console.log('[头像上传] 后端返回 URL:', avatarUrl)
     
-    // 严格检查业务状态码
-    if (res && res.code === 200) {
-      const newAvatarUrl = res.data
-      console.log('[头像上传] 后端返回 URL:', newAvatarUrl)
-      
-      if (newAvatarUrl && typeof newAvatarUrl === 'string') {
-        const fullUrl = resolveImageUrl(newAvatarUrl)
+    if (avatarUrl && typeof avatarUrl === 'string') {
+        const fullUrl = resolveImageUrl(avatarUrl)
         // 立即更新前端显示
-        userInfo.value.avatar = fullUrl
-        console.log('[头像上传] 最终设置 src:', fullUrl)
-        ElMessage.success('头像上传成功')
-      } else {
-        console.warn('[头像上传] data 不是字符串:', typeof newAvatarUrl, newAvatarUrl)
-        ElMessage.error('上传成功但未获取到头像地址')
-      }
+      userInfo.value.avatar = fullUrl
+      console.log('[头像上传] 最终设置 src:', fullUrl)
+      ElMessage.success('头像上传成功')
     } else {
-      // 业务失败
-      const errMsg = res?.msg || res?.message || '上传失败'
-      console.warn('[头像上传] 业务失败:', res)
-      ElMessage.error(errMsg)
+      console.warn('[头像上传] data 不是字符串:', typeof avatarUrl, avatarUrl)
+      ElMessage.error('上传成功但未获取到头像地址')
     }
   } catch (err) {
     console.error('[头像上传] 请求异常:', err)
-    ElMessage.error(err.response?.data?.message || '头像上传失败')
+    ElMessage.error(err.message || '头像上传失败')
   } finally {
     avatarUploading.value = false
     if (avatarInput.value) avatarInput.value.value = ''
@@ -568,7 +560,7 @@ const submitAddrForm = async () => {
     await loadAddr()
     closeAddrDialog()
   } catch (err) {
-    ElMessage.error(err.response?.data?.message || (isEditMode.value ? '修改失败' : '添加失败'))
+    ElMessage.error(err.message || (isEditMode.value ? '修改失败' : '添加失败'))
   } finally {
     addrSubmitting.value = false
   }
@@ -665,7 +657,7 @@ const loadOrders = async () => {
   try {
     const res = await getUserOrders()
     const list = res.data || []
-    console.log('[订单列表] 后端返回:', JSON.stringify(list.map(o => ({ id: o.id, status: o.status, statusType: typeof o.status }))))
+    console.log('[订单列表] 后端返回:', JSON.stringify(list.map(o => ({ id: o.id, status: o.status, statusType: typeof o.status, expireTime: o.expireTime }))))
     // 并行获取每个订单的商品明细
     const ordersWithItems = await Promise.all(
       list.map(async (order) => {
@@ -691,8 +683,10 @@ const loadOrders = async () => {
           id: order.id,
           shop: order.shopName || '云梦商城',
           no: order.orderNo || order.id,
+          rawStatus: order.status,           // 保留原始状态码用于倒计时判断
           status: sm.label,
           statusClass: sm.statusClass,
+          expireTime: order.expireTime || '', // 订单过期时间
           total: totalAmount,
           totalQty,
           goods,
@@ -701,6 +695,8 @@ const loadOrders = async () => {
       })
     )
     orders.value = ordersWithItems
+    // 启动待付款订单的倒计时
+    startOrderCountdowns()
   } catch (err) {
     console.error('加载订单失败:', err)
   } finally {
@@ -710,6 +706,55 @@ const loadOrders = async () => {
 
 const filteredOrders = computed(() => orderTab.value === '全部' ? orders.value : orders.value.filter(o => o.status === orderTab.value))
 const toggleLogistics = (id) => { expandedOrder.value = expandedOrder.value === id ? null : id }
+
+// ─── 订单倒计时 ─────────────────────────────────────────────────
+const orderCountdowns = ref({})    // { orderId: 'MM:SS' }
+const orderExpiredMap = ref({})    // { orderId: true }
+let orderCountdownTimers = {}
+
+const getRemainingSeconds = (expireTime) => {
+  if (!expireTime) return -1
+  // 兼容两种格式: "2026-06-18 16:09:56" 和 "2026-06-18T16:09:57"
+  const dt = new Date(expireTime.replace(/-/g, '/').replace('T', ' '))
+  if (isNaN(dt.getTime())) return -1
+  return Math.max(0, Math.floor((dt.getTime() - Date.now()) / 1000))
+}
+
+const formatCountdown = (seconds) => {
+  if (seconds < 0) return ''
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+}
+
+const startOrderCountdowns = () => {
+  // 先清除旧定时器
+  stopOrderCountdowns()
+  orders.value.forEach(order => {
+    // 只有待付款（rawStatus=0 或 'PENDING_PAYMENT'）且有过期时间的订单才倒计时
+    const isPending = order.rawStatus === 0 || order.rawStatus === 'PENDING_PAYMENT'
+    if (!isPending || !order.expireTime) return
+    console.log('[订单倒计时] 启动:', order.id, 'expireTime:', order.expireTime)
+    const tick = () => {
+      const remaining = getRemainingSeconds(order.expireTime)
+      if (remaining <= 0) {
+        orderCountdowns.value[order.id] = '已超时'
+        orderExpiredMap.value[order.id] = true
+        clearInterval(orderCountdownTimers[order.id])
+        delete orderCountdownTimers[order.id]
+        return
+      }
+      orderCountdowns.value[order.id] = formatCountdown(remaining) + ' 后取消'
+    }
+    tick()
+    orderCountdownTimers[order.id] = setInterval(tick, 1000)
+  })
+}
+
+const stopOrderCountdowns = () => {
+  Object.values(orderCountdownTimers).forEach(clearInterval)
+  orderCountdownTimers = {}
+}
 
 // ─── 地址 ─────────────────────────────────────────────────────
 const addresses      = ref([])
@@ -753,7 +798,7 @@ const loadAddr = async () => {
       createTime: item.createTime,
     }))
   } catch (err) {
-    ElMessage.error(err.response?.data?.message || '地址加载失败')
+    ElMessage.error(err.message || '地址加载失败')
   } finally {
     addrLoading.value = false
   }
@@ -812,7 +857,7 @@ const removeHistory = async (id) => {
     historyItems.value = historyItems.value.filter(i => i.id !== id)
     ElMessage.success('已移除')
   } catch (err) {
-    ElMessage.error(err.response?.data?.message || '操作失败')
+    ElMessage.error(err.message || '操作失败')
   }
 }
 
@@ -931,14 +976,14 @@ const removeFav = async (id) => {
     favItems.value = favItems.value.filter(i => i.id !== id)
     ElMessage.success('已取消收藏')
   } catch (err) {
-    ElMessage.error(err.response?.data?.message || '操作失败')
+    ElMessage.error(err.message || '操作失败')
   }
 }
 
 // ─── 工具 ─────────────────────────────────────────────────────
 const toolItems = ref([
   { id: 1, icon: '⭐', name: '商品评价',   desc: '待评价 3 件',  color: '#f0cc7a', badge: '3'   },
-  { id: 2, icon: '🔔', name: '消息通知',   desc: '2条未读',      color: '#a78bfa', badge: '2'   },
+  { id: 2, icon: '🔔', name: '消息通知',   desc: '暂无通知',    color: '#a78bfa', badge: null,  path: '/notice' },
   { id: 3, icon: '🎫', name: '我的优惠券', desc: '8张可用',      color: '#f472b6', badge: '8',   path: '/coupon' },
   { id: 4, icon: '🎁', name: '礼品卡',     desc: '2张未使用',    color: '#22c55e', badge: null  },
   { id: 5, icon: '🤝', name: '邀请有礼',   desc: '邀好友得红包', color: '#ff6b35', badge: 'NEW' },
@@ -949,6 +994,24 @@ const toolItems = ref([
 
 const handleToolClick = (tool) => {
   if (tool.path) router.push(tool.path)
+}
+
+// ─── 未读通知数 ───────────────────────────────────────────────
+const unreadNoticeCount = ref(0)
+
+const loadUnreadNoticeCount = async () => {
+  try {
+    const count = await getUnreadNoticeCount()
+    const n = typeof count === 'number' ? count : (count?.data ?? 0)
+    unreadNoticeCount.value = n
+    const noticeTool = toolItems.value.find(t => t.id === 2)
+    if (noticeTool) {
+      noticeTool.badge = n > 0 ? String(n) : null
+      noticeTool.desc = n > 0 ? `${n}条未读` : '暂无通知'
+    }
+  } catch {
+    // 静默
+  }
 }
 
 // 是否已达最高等级
@@ -1040,7 +1103,7 @@ const handleUnfollow = async (shopId) => {
     followedShops.value = followedShops.value.filter(s => s.id !== shopId)
     ElMessage.success('已取消关注')
   } catch (err) {
-    ElMessage.error(err.response?.data?.message || '操作失败')
+    ElMessage.error(err.message || '操作失败')
   }
 }
 
@@ -1070,6 +1133,11 @@ onMounted(() => {
   loadFollows()
   loadHistory()
   loadMyCouponsPreview()
+  loadUnreadNoticeCount()
+})
+
+onUnmounted(() => {
+  stopOrderCountdowns()
 })
 </script>
 <style scoped>
@@ -1286,9 +1354,22 @@ onMounted(() => {
 .og-price { font-size: 15px; font-weight: 600; color: var(--gold); font-family: 'Space Mono', monospace; }
 .og-qty   { font-size: 11px; color: var(--text3); }
 
-.order-footer { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; border-top: 1px solid var(--border); background: var(--bg2); }
+.order-footer { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; border-top: 1px solid var(--border); background: var(--bg2); flex-wrap: wrap; gap: 8px; }
 .order-total { font-size: 12px; color: var(--text3); }
 .order-total strong { color: var(--text); font-family: 'Space Mono', monospace; }
+
+.order-countdown {
+  font-size: 12px; color: #B8444A; font-weight: 500;
+  font-family: 'Space Mono', monospace;
+  padding: 3px 10px; border-radius: 6px;
+  background: rgba(184,68,74,0.07);
+  border: 1px solid rgba(184,68,74,0.15);
+}
+.order-countdown.od-expired {
+  color: #8A8070;
+  background: rgba(138,128,112,0.08);
+  border-color: rgba(138,128,112,0.2);
+}
 .order-actions { display: flex; gap: 8px; }
 .oa-primary {
   padding: 7px 16px;

@@ -247,7 +247,7 @@
               </div>
             </div>
             <div class="field">
-              <label>昵称 <span class="optional">选填</span></label>
+              <label>昵称 <span class="required">必填</span></label>
               <div class="input-wrap" :class="{ focused: focus.nickname }">
                 <svg class="fi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                 <input v-model="regForm.nickname" type="text" placeholder="你的云梦昵称"
@@ -274,6 +274,17 @@
           <span class="dot">·</span>
           <a href="#" class="footer-link">帮助中心</a>
         </div>
+
+        <!-- 商家入驻引导 -->
+        <div v-if="mode==='login'" class="merchant-hint">
+          <router-link to="/shop/register" class="hint-link">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+              <polyline points="9 22 9 12 15 12 15 22"/>
+            </svg>
+            <span>想开店？点击此处入驻</span>
+          </router-link>
+        </div>
       </div>
     </div>
   </div>
@@ -283,7 +294,7 @@
 import { ref, reactive, computed, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { login, register, sendSmsCode } from '../api/user'
+import { login, register, sendSmsCode, getProfileStatus } from '../api/user'
 
 const route = useRoute()
 const router = useRouter()
@@ -356,11 +367,25 @@ const handleLogin = async () => {
       password: loginForm.password
     })
     saveLoginState(res.nickname || res.username)
-    localStorage.setItem('token', res.data.token)
+    localStorage.setItem('token', res.token)
+
+    // 查数据库：city、birthday、province 均非空才算已完善
+    try {
+      const ok = await getProfileStatus()
+      if (!ok) {
+        router.push('/profile/setup')
+        return
+      }
+    } catch (e) {
+      // 接口失败也引导完善（兜底）
+      router.push('/profile/setup')
+      return
+    }
+
     const redirect = route.query.redirect || '/home'
     router.push(redirect)
   } catch (err) {
-    errors.account = err.response?.data?.message || '登录失败，请重试'
+    errors.account = '登录失败，请检查账号密码是否正确'
   } finally {
     submitting.value = false
   }
@@ -384,20 +409,29 @@ const handleRegister = async () => {
   // 👇 关键：校验密码强度
   if (!validateRegPassword()) return
 
+  if (!regForm.nickname.trim()) {
+    ElMessage.error('请输入昵称')
+    return
+  }
+
   regSubmitting.value = true
   try {
-    const res = await register({
+    // 👇 清掉旧 token，防止注册请求带上已登录商家的身份
+    localStorage.removeItem('token')
+    await register({
       phone: regForm.phone,
       code: regForm.code,
       password: regForm.password,
-      nickname: regForm.nickname || ''
+      nickname: regForm.nickname.trim()
     })
-    saveLoginState(res.nickname || res.phone)
-    localStorage.setItem('token', res.token)
+    // 后端注册接口返回 data: null，需调 login 获取 token
+    const loginRes = await login({ account: regForm.phone, password: regForm.password })
+    saveLoginState(loginRes.nickname || loginRes.phone || regForm.phone)
+    localStorage.setItem('token', loginRes.token)
     ElMessage.success('注册成功！')
-    router.push('/home')
+    router.push('/profile/setup')
   } catch (err) {
-    ElMessage.error(err.response?.data?.message || '注册失败，请重试')
+    ElMessage.error('注册失败，该手机号可能已注册')
   } finally {
     regSubmitting.value = false
   }
@@ -407,8 +441,16 @@ const handleRegister = async () => {
 const smsCD = ref(0); let smsT = null
 const regCD = ref(0); let regT = null
 
-const sendSms = () => {
+const sendSms = async () => {
   if (!smsForm.phone) return
+  try {
+    const res = await sendSmsCode({ phone: smsForm.phone })
+    // 成功才走到这里，code !== 200 已被拦截器 reject
+    ElMessage.success('验证码已发送')
+  } catch (err) {
+    ElMessage.error('验证码发送失败，请稍后重试')
+    return
+  }
   smsCD.value = 60
   smsT = setInterval(() => {
     smsCD.value--
@@ -421,7 +463,8 @@ const sendRegSms = async () => {
   if (errors.regPhone) return
 
   try {
-    await sendSmsCode({ phone: regForm.phone })
+    const res = await sendSmsCode({ phone: regForm.phone })
+    // 成功才走到这里
     ElMessage.success('验证码已发送')
     regCD.value = 60
     regT = setInterval(() => {
@@ -429,7 +472,7 @@ const sendRegSms = async () => {
       if (regCD.value <= 0) clearInterval(regT)
     }, 1000)
   } catch (err) {
-    ElMessage.error(err.response?.data?.message || '发送失败，请重试')
+    ElMessage.error('验证码发送失败，请稍后重试')
   }
 }
 
@@ -610,9 +653,30 @@ onUnmounted(() => {
 .str-bar.hi { background: #27AE60; }
 .str-label { font-size: 11px; color: #8A8070; }
 
-/* ── 注册福利 ── */
+/* ── 注册福利 ─ */
 .new-perk-banner { display: flex; align-items: center; gap: 8px; background: #FFFDF5; border: 1px solid rgba(201,168,76,0.3); border-left: 3px solid #C9A84C; border-radius: 10px; padding: 10px 14px; font-size: 12px; color: #4A4438; font-weight: 300; margin-bottom: 20px; }
 .new-perk-banner strong { color: #A07830; font-weight: 600; }
+
+/* ── 商家入驻引导 ── */
+.merchant-hint {
+  text-align: center;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #E0D8C8;
+}
+.hint-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #A07830;
+  font-size: 13px;
+  text-decoration: none;
+  transition: all 0.2s;
+}
+.hint-link:hover {
+  color: #C9A84C;
+  transform: translateY(-1px);
+}
 
 /* ── 底部 ── */
 .card-footer { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 22px; padding-top: 18px; border-top: 1px solid #F0EAE0; font-size: 11px; color: #B0A898; }

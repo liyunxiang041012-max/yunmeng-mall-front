@@ -311,9 +311,9 @@ const pageNums = computed(() => {
 const fetchCategories = async () => {
   try {
     const res = await getTopCategories()
-    categories.value = [{ id: 0, name: '全部' }, ...res.data]
+    categories.value = [{ id: 0, name: '全部' }, ...res]
   } catch (err) {
-    ElMessage.error(err.response?.data?.message || '分类加载失败')
+    ElMessage.error(err.message || '分类加载失败')
   }
 }
 
@@ -335,11 +335,11 @@ const fetchGoods = async () => {
     }
 
     const res = await getItemPage(params)
-    goodsList.value = res.data.list   || []
-    page.total      = res.data.total  || 0
-    page.pages      = res.data.pages  || 0
+    goodsList.value = res.list   || []
+    page.total      = res.total  || 0
+    page.pages      = res.pages  || 0
   } catch (err) {
-    ElMessage.error(err.response?.data?.message || '商品加载失败，请重试')
+    ElMessage.error(err.message || '商品加载失败，请重试')
     goodsList.value = []
   } finally {
     loading.value = false
@@ -397,7 +397,7 @@ const addToCart = async (item) => {
     })
     ElMessage.success(`已加入购物车:${item.name}`)
   } catch (err) {
-    ElMessage.error(err.response?.data?.message || '加入购物车失败,请重试')
+    ElMessage.error(err.message || '加入购物车失败,请重试')
   }
 }
 
