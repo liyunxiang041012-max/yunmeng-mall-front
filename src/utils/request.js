@@ -22,13 +22,12 @@ request.interceptors.response.use(
     const body = res.data
     // 业务错误（code 非 200 且非 0），后端统一返回 { code, message/msg }
     if (body && typeof body.code === 'number' && body.code !== 200 && body.code !== 0) {
-      // 直接用后端返回的 message，没有就硬编码
       const msg = body.message || body.msg || '操作失败，请稍后重试'
-      ElMessage.error(msg)
+      if (!res.config._silent) ElMessage.error(msg)
       return Promise.reject(new Error(msg))
     }
-    // 成功：直接返回 data 字段
-    return body.data
+    // 成功：优先返回 data 字段（兼容 Result<T> 包装），没有则返回整个 body
+    return body && body.data !== undefined ? body.data : body
   },
   err => {
     // 401 跳登录（区分管理员端和用户端）
@@ -42,7 +41,7 @@ request.interceptors.response.use(
     // 其他所有错误 → 优先用后端返回的 message
     const backendMsg = err.response?.data?.message || err.response?.data?.msg
     const msg = backendMsg || '网络异常，请稍后重试'
-    ElMessage.error(msg)
+    if (!err.config?._silent) ElMessage.error(msg)
     return Promise.reject(new Error(msg))
   }
 )

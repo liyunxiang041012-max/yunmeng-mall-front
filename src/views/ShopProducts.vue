@@ -109,15 +109,24 @@
                   <input v-model="form.name" type="text" placeholder="请输入商品名称" required maxlength="100" />
                 </div>
 
-                <!-- 价格 + 库存 -->
+                <!-- 价格 + 库存（有规格时自动从SKU计算） -->
                 <div class="spmf-row">
                   <div class="spmf-field">
                     <label>价格（元）<span class="required">*</span></label>
-                    <input v-model.number="formPriceYuan" type="number" step="0.01" min="0" placeholder="0.00" required />
+                    <input
+                      v-if="!hasSku"
+                      v-model.number="formPriceYuan"
+                      type="number" step="0.01" min="0" placeholder="0.00" required
+                    />
+                    <div v-else class="spmf-auto-value">最低 ¥{{ minSkuPriceYuan }}</div>
                   </div>
                   <div class="spmf-field">
-                    <label>库存 <span class="required">*</span></label>
-                    <input v-model.number="form.stock" type="number" min="0" placeholder="0" required />
+                    <label>库存<span class="required">*</span></label>
+                    <input
+                      v-if="!hasSku"
+                      v-model.number="form.stock" type="number" min="0" placeholder="0" required
+                    />
+                    <div v-else class="spmf-auto-value">共 {{ totalSkuStock }} 件</div>
                   </div>
                 </div>
 
@@ -149,12 +158,152 @@
                   </select>
                 </div>
 
+                <!-- ═══════ 规格管理 ═══════ -->
+                <div class="spmf-field">
+                  <label>商品规格 <span class="spmf-label-hint">（选填）</span></label>
+
+                  <!-- 规格模板选择器（选了分类 && 有模板 && 还没选规格时显示） -->
+                  <div v-if="(cate1 || cate2 || cate3) && availableTemplates.length > 0 && !hasSku" class="template-selector">
+                    <span class="template-hint">选择规格模板：</span>
+                    <button
+                      v-for="t in availableTemplates"
+                      :key="t.id"
+                      type="button"
+                      :class="['template-chip', { active: selectedTemplateIds.includes(t.id) }]"
+                      @click="toggleTemplate(t)"
+                    >
+                      {{ t.specName }}
+                      <span class="template-values-preview">（{{ t.values.map(v => v.value).join('、') }}）</span>
+                    </button>
+                    <span class="template-or">或</span>
+                    <button type="button" class="spec-add-first-btn" @click="addSpecGroup()">手动添加</button>
+                  </div>
+
+                  <div v-if="specGroups.length > 0" class="spec-editor">
+                    <div class="spec-groups">
+                      <div v-for="(sg, i) in specGroups" :key="sg.id" class="spec-group-row">
+                        <template v-if="sg.templateId">
+                          <div class="spec-group-name readonly">{{ sg.name }}</div>
+                          <div class="spec-group-values readonly">{{ sg.values }}</div>
+                        </template>
+                        <template v-else>
+                          <input
+                            v-model="sg.name"
+                            placeholder="规格名（如颜色）"
+                            class="spec-name-input"
+                            @input="debounceGenerateSku"
+                          />
+                          <input
+                            v-model="sg.values"
+                            placeholder="规格值，逗号分隔（如 星空黑,月光白）"
+                            class="spec-values-input"
+                            @input="debounceGenerateSku"
+                          />
+                        </template>
+                        <button type="button" class="spec-remove-btn" @click="removeSpecGroup(i)" title="移除">×</button>
+                      </div>
+                    </div>
+                    <!-- 只有存在非模板规格时才显示手动添加按钮 -->
+                    <button
+                      v-if="specGroups.some(sg => !sg.templateId)"
+                      type="button"
+                      class="spec-add-btn"
+                      @click="addSpecGroup"
+                    >+ 添加规格组</button>
+
+                    <!-- SKU 矩阵表 -->
+                    <div v-if="skuTable.length > 0" class="sku-table-wrap">
+                      <div class="sku-table-header">
+                        <span class="sku-table-title">SKU 明细（{{ skuTable.length }} 条）</span>
+                        <span class="sku-table-hint">最低价将作为商品显示价格</span>
+                      </div>
+                      <div class="sku-table-scroll">
+                        <table class="sku-table">
+                          <thead>
+                            <tr>
+                              <th v-for="sg in validSpecGroups" :key="sg.id" class="sku-th-spec">{{ sg.name }}</th>
+                              <th class="sku-th-price">价格（元）</th>
+                              <th class="sku-th-stock">库存</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr v-for="(sku, idx) in skuTable" :key="idx">
+                              <td v-for="sg in validSpecGroups" :key="sg.id" class="sku-td-spec">
+                                <span class="sku-spec-tag">{{ sku.specs[sg.name] }}</span>
+                              </td>
+                              <td class="sku-td-price">
+                                <input
+                                  v-model.number="sku.price"
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  class="sku-input"
+                                  placeholder="0.00"
+                                  @input="updateFormPriceFromSku"
+                                />
+                              </td>
+                              <td class="sku-td-stock">
+                                <input
+                                  v-model.number="sku.stock"
+                                  type="number"
+                                  min="0"
+                                  class="sku-input"
+                                  placeholder="0"
+                                />
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <!-- 批量设置 -->
+                      <div class="sku-batch-bar">
+                        <span class="sku-batch-label">批量设置：</span>
+                        <input
+                          v-model.number="batchPrice"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="统一价格"
+                          class="sku-batch-input"
+                        />
+                        <button type="button" class="sku-batch-btn" @click="applyBatchPrice">应用</button>
+                        <input
+                          v-model.number="batchStock"
+                          type="number"
+                          min="0"
+                          placeholder="统一库存"
+                          class="sku-batch-input"
+                        />
+                        <button type="button" class="sku-batch-btn" @click="applyBatchStock">应用</button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    v-if="!hasSku && (!(cate1 || cate2 || cate3) || availableTemplates.length === 0)"
+                    type="button"
+                    class="spec-add-first-btn"
+                    @click="addSpecGroup()"
+                  >
+                    + 添加规格（如颜色、尺码）
+                  </button>
+                  <button
+                    v-if="hasSku"
+                    type="button"
+                    class="spec-remove-all-btn"
+                    @click="clearAllSpecs"
+                  >
+                    清除所有规格
+                  </button>
+                </div>
+
                 <p v-if="!isEdit" class="spmf-note">新增后默认「已下架」，需手动点击上架。</p>
                 <p class="spmf-error" v-if="modalError">{{ modalError }}</p>
 
                 <div class="spmf-actions">
                   <button type="button" class="btn-cancel" @click="closeModal">取消</button>
-                  <button type="button" class="btn-save" :disabled="saving" @click="handleSave">
+                  <button type="button" class="btn-save" :disabled="saving" @click="() => { console.log('[ShopProducts] 保存按钮被点击!'); handleSave() }">
                     {{ saving ? '保存中...' : (isEdit ? '保存修改' : '发布商品') }}
                   </button>
                 </div>
@@ -213,13 +362,14 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { Search, Plus, Package, Upload, X } from 'lucide-vue-next'
 import {
-  getShopProductPage, createShopProduct, updateShopProduct,
+  getShopProductPage, getShopProductDetail, createShopProduct, updateShopProduct,
   deleteShopProduct, toggleShopProductStatus, uploadProductImage
 } from '../api/shop'
 import { getTopCategories, getCategoryChildren, getBrandList } from '../api/item'
+import { getSpecTemplates } from '../api/item'
 
 const products = ref([])
 const loading = ref(false)
@@ -299,6 +449,9 @@ async function onCate2Change() {
 
 function onCate3Change() {
   form.categoryId = cate3.value || cate2.value || cate1.value || ''
+  // 当最终分类确定后，加载该分类的规格模板
+  const categoryId = cate3.value || cate2.value || cate1.value
+  if (categoryId) loadSpecTemplates(categoryId)
 }
 
 function resetCate() {
@@ -307,6 +460,49 @@ function resetCate() {
   cate3.value = ''
   cateLevel2.value = []
   cateLevel3.value = []
+}
+
+// 编辑时回显分类级联（通过遍历分类树找到目标 ID 所在层级）
+async function restoreCategoryCascade(targetId) {
+  if (!targetId) return
+  const id = Number(targetId)
+
+  // 确保一级已加载
+  if (!cateLevel1.value.length) {
+    try { cateLevel1.value = await getTopCategories() ?? [] } catch { return }
+  }
+
+  // 1) 是否一级
+  const l1 = cateLevel1.value.find(c => c.id === id)
+  if (l1) { cate1.value = id; return }
+
+  // 2) 是否二级
+  for (const c1 of cateLevel1.value) {
+    const kids = await getCategoryChildren(c1.id).catch(() => [])
+    const l2 = (kids || []).find(c => c.id === id)
+    if (l2) {
+      cate1.value = c1.id
+      cateLevel2.value = kids || []
+      cate2.value = id
+      return
+    }
+    // 3) 是否三级
+    for (const c2 of (kids || [])) {
+      const grandKids = await getCategoryChildren(c2.id).catch(() => [])
+      const l3 = (grandKids || []).find(c => c.id === id)
+      if (l3) {
+        cate1.value = c1.id
+        cateLevel2.value = kids || []
+        cate2.value = c2.id
+        cateLevel3.value = grandKids || []
+        cate3.value = id
+        return
+      }
+    }
+  }
+  // 没找到：保持 form.categoryId 已正确设置，级联不回显也不影响提交
+  // 加载该分类的规格模板（编辑时清除规格后可重新选择）
+  loadSpecTemplates(id)
 }
 
 // ─── 品牌 ───
@@ -319,6 +515,153 @@ async function loadBrands() {
   } catch (e) {
     console.error('加载品牌失败:', e)
   }
+}
+
+// ═══════════════════════════════════
+// 规格 / SKU 管理
+// ═══════════════════════════════════
+const specGroups = ref([])       // [{ id, name, values }]
+const skuTable = ref([])         // [{ specs: {颜色,尺码}, price, stock }]
+const batchPrice = ref(null)
+const batchStock = ref(null)
+let skuIdCounter = 0
+let skuDebounceTimer = null
+
+// 规格模板（从后端加载）
+const availableTemplates = ref([])   // [{ id, specName, values: [{id,value}] }]
+const selectedTemplateIds = ref([])   // [1, 2, ...]
+
+function nextSkuId() { return `s_${++skuIdCounter}` }
+
+const hasSku = computed(() => specGroups.value.length > 0 && skuTable.value.length > 0)
+
+// 最低 SKU 价格（元，用于显示，SKU 价格已存元）
+const minSkuPriceYuan = computed(() => {
+  const prices = skuTable.value.filter(s => s.price > 0).map(s => s.price)
+  if (!prices.length) return '0.00'
+  return Math.min(...prices).toFixed(2)
+})
+
+// SKU 总库存
+const totalSkuStock = computed(() =>
+  skuTable.value.reduce((sum, s) => sum + (s.stock || 0), 0)
+)
+
+// SKU 价格变动时同步更新商品显示价格
+function updateFormPriceFromSku() {
+  formPriceYuan.value = Number(minSkuPriceYuan.value)
+}
+
+const validSpecGroups = computed(() =>
+  specGroups.value.filter(sg => sg.name.trim() && sg.values.trim())
+)
+
+// 笛卡尔积
+function cartesian(...arrays) {
+  return arrays.reduce((acc, arr) =>
+    acc.flatMap(x => arr.map(y => [...x, y])),
+    [[]]
+  )
+}
+
+// 根据规格组生成 SKU 矩阵
+function generateSkuTable() {
+  const valid = validSpecGroups.value
+  if (valid.length === 0) { skuTable.value = []; return }
+
+  const valueArrays = valid.map(sg =>
+    sg.values.split(',').map(v => v.trim()).filter(Boolean)
+  )
+  // 任一规格组没有有效值 → 不生成
+  if (valueArrays.some(arr => arr.length === 0)) { skuTable.value = []; return }
+
+  // 保留旧 SKU 数据
+  const oldMap = {}
+  skuTable.value.forEach(sku => {
+    const key = valid.map(sg => sku.specs[sg.name] ?? '').join('|||')
+    oldMap[key] = sku
+  })
+
+  const combos = cartesian(...valueArrays)
+  skuTable.value = combos.map(combo => {
+    const specs = {}
+    valid.forEach((sg, i) => specs[sg.name.trim()] = combo[i])
+    const key = combo.join('|||')
+    const old = oldMap[key]
+    return {
+      specs,
+      price: old?.price ?? 0,
+      stock: old?.stock ?? 0,
+    }
+  })
+}
+
+const debounceGenerateSku = () => {
+  clearTimeout(skuDebounceTimer)
+  skuDebounceTimer = setTimeout(generateSkuTable, 300)
+}
+
+function addSpecGroup() {
+  specGroups.value.push({ id: nextSkuId(), name: '', values: '' })
+}
+
+function removeSpecGroup(i) {
+  const sg = specGroups.value[i]
+  if (sg?.templateId) {
+    const tIdx = selectedTemplateIds.value.indexOf(sg.templateId)
+    if (tIdx >= 0) selectedTemplateIds.value.splice(tIdx, 1)
+  }
+  specGroups.value.splice(i, 1)
+  generateSkuTable()
+}
+
+function clearAllSpecs() {
+  specGroups.value = []
+  skuTable.value = []
+  selectedTemplateIds.value = []
+  batchPrice.value = null
+  batchStock.value = null
+  formPriceYuan.value = 0
+  form.stock = 0
+}
+
+// 加载当前分类下的规格模板
+async function loadSpecTemplates(categoryId) {
+  if (!categoryId) { availableTemplates.value = []; return }
+  try {
+    availableTemplates.value = await getSpecTemplates(categoryId) ?? []
+  } catch {
+    availableTemplates.value = []
+  }
+}
+
+// 点击模板 Chip 进行勾选/取消
+function toggleTemplate(template) {
+  const idx = selectedTemplateIds.value.indexOf(template.id)
+  if (idx >= 0) {
+    selectedTemplateIds.value.splice(idx, 1)
+    specGroups.value = specGroups.value.filter(sg => sg.templateId !== template.id)
+  } else {
+    selectedTemplateIds.value.push(template.id)
+    specGroups.value.push({
+      id: nextSkuId(),
+      name: template.specName,
+      values: template.values.map(v => v.value).join(','),
+      templateId: template.id,
+    })
+  }
+  generateSkuTable()
+}
+
+function applyBatchPrice() {
+  if (batchPrice.value == null || batchPrice.value < 0) return
+  // 批量价格输入为元，直接赋值给 SKU（SKU 价格统一存元，提交时转分）
+  skuTable.value.forEach(sku => { sku.price = batchPrice.value })
+}
+
+function applyBatchStock() {
+  if (batchStock.value == null || batchStock.value < 0) return
+  skuTable.value.forEach(sku => { sku.stock = batchStock.value })
 }
 
 const defaultForm = () => ({ name: '', image: '', price: 0, stock: 0, categoryId: '', brandId: '' })
@@ -368,12 +711,12 @@ async function loadProducts() {
     if (statusFilter.value !== '') params.status = Number(statusFilter.value)
 
     const res = await getShopProductPage(params)
-    const data = res.data || res
-    if (data.list) {
-      products.value = data.list
-      totalPages.value = Math.max(1, Math.ceil((data.total || 0) / pageSize.value))
-    } else if (Array.isArray(data)) {
-      products.value = data
+    // 拦截器已解包 Result<T>，res 即 data 内容
+    if (res && res.list) {
+      products.value = res.list
+      totalPages.value = Math.max(1, Math.ceil((res.total || 0) / pageSize.value))
+    } else if (Array.isArray(res)) {
+      products.value = res
       totalPages.value = 1
     }
   } catch (e) {
@@ -384,21 +727,43 @@ async function loadProducts() {
 }
 
 // ─── 添加/编辑弹窗 ───
-function openAdd() {
+async function openAdd() {
+  console.log('[ShopProducts] openAdd 触发')
   isEdit.value = false
   editId.value = null
+  saving.value = false
   Object.assign(form, defaultForm())
   formPriceYuan.value = 0
   modalError.value = ''
+  specGroups.value = []
+  skuTable.value = []
+  selectedTemplateIds.value = []
+  availableTemplates.value = []
+  batchPrice.value = null
+  batchStock.value = null
   showModal.value = true
+  console.log('[ShopProducts] showModal =', showModal.value)
   loadCateLevel1()
   loadBrands()
   resetCate()
 }
 
 function openEdit(p) {
+  console.log('[ShopProducts] openEdit 触发', { id: p.id, name: p.name })
   isEdit.value = true
   editId.value = p.id
+  saving.value = false
+  modalError.value = ''
+  showModal.value = true
+  loadCateLevel1()
+  loadBrands()
+  resetCate()
+  selectedTemplateIds.value = []
+  availableTemplates.value = []
+  batchPrice.value = null
+  batchStock.value = null
+
+  // 预填列表数据（列表接口已含 specs+skus）
   Object.assign(form, {
     name: p.name || '',
     image: p.image || '',
@@ -408,11 +773,71 @@ function openEdit(p) {
     brandId: p.brandId || '',
   })
   formPriceYuan.value = p.price ? Number((p.price / 100).toFixed(2)) : 0
-  modalError.value = ''
-  showModal.value = true
-  loadCateLevel1()
-  loadBrands()
-  resetCate()
+
+  // 列表数据已有 specs+skus，直接回显
+  if (p.specs && p.specs.length) {
+    specGroups.value = p.specs.map(s => ({
+      id: nextSkuId(),
+      name: s.specName || '',
+      values: Array.isArray(s.values)
+        ? s.values.map(v => (typeof v === 'string' ? v : v.value)).join(',')
+        : '',
+    }))
+    skuTable.value = (p.skus || []).map(sku => ({
+      specs: sku.specData || {},
+      price: sku.price ? Number((sku.price / 100).toFixed(2)) : 0,
+      stock: sku.stock || 0,
+    }))
+  } else {
+    specGroups.value = []
+    skuTable.value = []
+  }
+
+  // 回显分类级联 + 加载规格模板
+  if (form.categoryId) {
+    restoreCategoryCascade(form.categoryId)
+  }
+}
+
+async function fetchProductDetail(itemId) {
+  try {
+    const detail = await getShopProductDetail(itemId)
+    console.log('[ShopProducts] 编辑回显-详情:', detail)
+    if (!detail) return
+
+    // 回填表单
+    Object.assign(form, {
+      name: detail.name || form.name,
+      image: detail.image || detail.mainImage || form.image,
+      categoryId: detail.categoryId || form.categoryId,
+      brandId: detail.brandId || form.brandId,
+    })
+    formPriceYuan.value = detail.price ? Number((detail.price / 100).toFixed(2)) : formPriceYuan.value
+
+    // 回显分类级联（需要分类 ID 才能选中）
+    if (detail.categoryId) {
+      restoreCategoryCascade(detail.categoryId)
+    }
+
+    // 回显规格
+    if (detail.specs && detail.specs.length) {
+      specGroups.value = detail.specs.map(s => ({
+        id: nextSkuId(),
+        name: s.specName || '',
+        values: Array.isArray(s.values)
+          ? s.values.map(v => (typeof v === 'string' ? v : v.value)).join(',')
+          : '',
+      }))
+      skuTable.value = (detail.skus || []).map(sku => ({
+        specs: sku.specData || {},
+        price: sku.price ? Number((sku.price / 100).toFixed(2)) : 0,
+        stock: sku.stock || 0,
+      }))
+    }
+  } catch (err) {
+    console.error('[ShopProducts] 获取商品详情失败:', err)
+    // 列表数据兜底，不做额外处理
+  }
 }
 
 function closeModal() { showModal.value = false }
@@ -456,30 +881,69 @@ async function uploadFile(file) {
 }
 
 async function handleSave() {
-  if (!form.name.trim()) { modalError.value = '请输入商品名称'; return }
-  if (!formPriceYuan.value || formPriceYuan.value <= 0) { modalError.value = '请输入有效价格'; return }
-  if (form.stock == null || form.stock < 0) { modalError.value = '请输入有效库存'; return }
+  console.log('[ShopProducts] ====== handleSave 触发 ======')
+  console.log('[ShopProducts] form:', JSON.parse(JSON.stringify(form)))
+  console.log('[ShopProducts] formPriceYuan:', formPriceYuan.value)
+  console.log('[ShopProducts] hasSku:', hasSku.value)
+  console.log('[ShopProducts] specGroups:', JSON.parse(JSON.stringify(specGroups.value)))
+  console.log('[ShopProducts] skuTable:', JSON.parse(JSON.stringify(skuTable.value)))
+  console.log('[ShopProducts] isEdit:', isEdit.value, 'editId:', editId.value)
 
+  if (!form.name.trim()) { modalError.value = '请输入商品名称'; console.log('[ShopProducts] 校验失败: 名称为空'); return }
+
+  // 多规格模式：校验 SKU 表
+  if (hasSku.value) {
+    console.log('[ShopProducts] 进入多规格校验')
+    if (validSpecGroups.value.length === 0) { modalError.value = '请至少添加一个规格组'; console.log('[ShopProducts] 校验失败: 无有效规格组'); return }
+    if (skuTable.value.length === 0) { modalError.value = '请填写规格值以生成 SKU'; console.log('[ShopProducts] 校验失败: SKU表为空'); return }
+    const invalid = skuTable.value.find(s => !s.price || s.price <= 0)
+    if (invalid) { modalError.value = '每个 SKU 必须填写有效价格'; console.log('[ShopProducts] 校验失败: SKU价格无效', invalid); return }
+  } else {
+    console.log('[ShopProducts] 进入单规格校验')
+    if (!formPriceYuan.value || formPriceYuan.value <= 0) { modalError.value = '请输入有效价格'; console.log('[ShopProducts] 校验失败: 价格无效'); return }
+    if (form.stock == null || form.stock < 0) { modalError.value = '请输入有效库存'; console.log('[ShopProducts] 校验失败: 库存无效'); return }
+  }
+
+  console.log('[ShopProducts] 校验通过，开始保存...')
   saving.value = true
   modalError.value = ''
   try {
-    // 价格 元→分
     const payload = {
       name: form.name.trim(),
-      price: Math.round(formPriceYuan.value * 100),
-      stock: form.stock,
       image: form.image || undefined,
       categoryId: form.categoryId || undefined,
       brandId: form.brandId || undefined,
     }
+
+    if (hasSku.value && skuTable.value.length > 0) {
+      // 多规格模式
+      payload.specs = validSpecGroups.value.map(sg => ({
+        specName: sg.name.trim(),
+        values: sg.values.split(',').map(v => v.trim()).filter(Boolean),
+      }))
+      payload.skus = skuTable.value.map(sku => ({
+        specData: sku.specs,
+        price: Math.round((sku.price || 0) * 100),   // 元 → 分
+        stock: sku.stock,
+      }))
+    } else {
+      // 单规格模式（兼容现有接口）
+      payload.price = Math.round(formPriceYuan.value * 100)
+      payload.stock = Number(form.stock) || 0
+    }
+
+    console.log('[ShopProducts] 提交 payload:', JSON.stringify(payload))
+
     if (isEdit.value) {
       await updateShopProduct(editId.value, payload)
     } else {
       await createShopProduct(payload)
     }
+    console.log('[ShopProducts] 保存成功')
     closeModal()
     await loadProducts()
   } catch (err) {
+    console.error('[ShopProducts] 保存失败:', err)
     modalError.value = err.message || '保存失败'
   } finally {
     saving.value = false
@@ -743,4 +1207,153 @@ onMounted(() => { loadProducts() })
 .btn-save:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-danger { background: #DC2626; }
 .btn-danger:hover:not(:disabled) { background: #B91C1C; }
+
+/* ═══════ 规格编辑器 ═══════ */
+.spmf-label-hint { font-size: 11px; color: #999; font-weight: 400; margin-left: 4px; }
+
+/* 自动计算值（有规格时显示，替代输入框） */
+.spmf-auto-value {
+  display: flex; align-items: center;
+  height: 38px; padding: 0 12px;
+  background: #F8F6F0; border: 1px solid #E8E0D0; border-radius: 8px;
+  font-size: 14px; font-weight: 530; color: #A07830;
+}
+
+/* 首次添加规格按钮 */
+.spec-add-first-btn {
+  padding: 8px 16px; border: 1px dashed #A09880; border-radius: 8px;
+  background: #FAFAF6; color: #8A7A50; font-size: 13px; cursor: pointer;
+  font-family: inherit; transition: all 0.15s; width: 100%;
+}
+.spec-add-first-btn:hover { border-color: #1A1A1A; color: #1A1A1A; background: #F5F1E8; }
+
+/* 规格模板选择器 */
+.template-selector {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  padding: 10px; background: #FAF8F4; border-radius: 8px; margin-top: 4px;
+  border: 1px solid #F0E8D8;
+}
+.template-hint { font-size: 12.5px; color: #8A7A50; font-weight: 500; white-space: nowrap; }
+.template-chip {
+  padding: 5px 11px; border: 1px solid #E0D8C8; border-radius: 16px;
+  background: #FFF; color: #5A4A30; font-size: 12.5px; cursor: pointer;
+  font-family: inherit; transition: all 0.15s; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 2px;
+}
+.template-chip:hover { border-color: #A09880; background: #F5F1E8; }
+.template-chip.active {
+  background: #1A1A18; color: #FFF; border-color: #1A1A18;
+}
+.template-values-preview { font-size: 11.5px; opacity: 0.7; }
+.template-or { font-size: 12px; color: #B0A898; margin: 0 2px; }
+.template-selector .spec-add-first-btn { width: auto; font-size: 12px; padding: 5px 12px; }
+
+/* 模板规格只读展示 */
+.spec-group-name.readonly,
+.spec-group-values.readonly {
+  padding: 6px 10px; background: #F8F6F0; border-radius: 6px;
+  font-size: 12.5px; color: #5A4A30; border: 1px solid #E8E0D0;
+}
+.spec-group-name.readonly { width: 100px; font-weight: 530; flex-shrink: 0; }
+.spec-group-values.readonly { flex: 1; }
+
+/* 清除所有规格按钮 */
+.spec-remove-all-btn {
+  margin-top: 10px; padding: 6px 14px; border: 1px solid #E8D0D0; border-radius: 7px;
+  background: transparent; color: #C0392B; font-size: 12.5px; cursor: pointer;
+  font-family: inherit; transition: all 0.15s;
+}
+.spec-remove-all-btn:hover { background: #FEF2F2; border-color: #DC2626; }
+
+.spec-editor { margin-top: 8px; }
+.spec-groups { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+.spec-group-row {
+  display: flex; align-items: center; gap: 8px;
+}
+.spec-name-input {
+  width: 130px; padding: 7px 10px; border: 1px solid #E0D8C8; border-radius: 7px;
+  font-size: 13px; font-family: inherit; color: #1A1A18; background: #FFF;
+  outline: none; transition: border-color 0.15s;
+}
+.spec-name-input:focus { border-color: #1A1A1A; }
+.spec-values-input {
+  flex: 1; padding: 7px 10px; border: 1px solid #E0D8C8; border-radius: 7px;
+  font-size: 13px; font-family: inherit; color: #1A1A18; background: #FFF;
+  outline: none; transition: border-color 0.15s;
+}
+.spec-values-input:focus { border-color: #1A1A1A; }
+.spec-remove-btn {
+  width: 28px; height: 28px; border: none; border-radius: 6px;
+  background: transparent; color: #999; font-size: 18px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s; flex-shrink: 0;
+}
+.spec-remove-btn:hover { background: #FEE2E2; color: #DC2626; }
+
+.spec-add-btn {
+  padding: 6px 14px; border: 1px dashed #C0B8A0; border-radius: 7px;
+  background: transparent; color: #8A7A50; font-size: 12.5px; cursor: pointer;
+  font-family: inherit; transition: all 0.15s;
+}
+.spec-add-btn:hover { border-color: #1A1A1A; color: #1A1A1A; background: #FAF8F4; }
+
+/* ═══════ SKU 矩阵表 ═══════ */
+.sku-table-wrap {
+  margin-top: 14px; border: 1px solid #E8E0D0; border-radius: 10px;
+  overflow: hidden; background: #FFF;
+}
+.sku-table-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; background: #FAF8F4; border-bottom: 1px solid #E8E0D0;
+}
+.sku-table-title { font-size: 13px; font-weight: 530; color: #1A1A18; }
+.sku-table-hint { font-size: 11.5px; color: #999; }
+.sku-table-scroll { overflow-x: auto; max-height: 300px; overflow-y: auto; }
+
+.sku-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.sku-table thead { position: sticky; top: 0; z-index: 1; }
+.sku-table th {
+  padding: 8px 10px; background: #F5F1E8; color: #5C5546; font-weight: 530;
+  text-align: left; font-size: 12px; border-bottom: 1px solid #E8E0D0;
+  white-space: nowrap;
+}
+.sku-table td { padding: 8px 10px; border-bottom: 1px solid #F0EBE0; vertical-align: middle; }
+.sku-table tbody tr:last-child td { border-bottom: none; }
+.sku-table tbody tr:hover { background: #FAFAF6; }
+
+.sku-th-spec { min-width: 60px; }
+.sku-th-price { min-width: 90px; }
+.sku-th-stock { min-width: 70px; }
+
+.sku-td-spec { }
+.sku-spec-tag {
+  display: inline-block; padding: 2px 8px; background: #F5F1E8;
+  border-radius: 4px; font-size: 12px; color: #4A4438; font-weight: 500;
+}
+
+.sku-input {
+  width: 80px; padding: 5px 8px; border: 1px solid #E0D8C8; border-radius: 6px;
+  font-size: 12.5px; font-family: inherit; color: #1A1A18; text-align: center;
+  outline: none; transition: border-color 0.15s;
+}
+.sku-input:focus { border-color: #1A1A1A; }
+
+/* 批量设置 */
+.sku-batch-bar {
+  display: flex; align-items: center; gap: 8px; padding: 10px 14px;
+  background: #FAFAF8; border-top: 1px solid #E8E0D0; flex-wrap: wrap;
+}
+.sku-batch-label { font-size: 12px; color: #8A7A50; white-space: nowrap; }
+.sku-batch-input {
+  width: 90px; padding: 5px 8px; border: 1px solid #E0D8C8; border-radius: 6px;
+  font-size: 12px; font-family: inherit; color: #1A1A18; outline: none;
+  transition: border-color 0.15s;
+}
+.sku-batch-input:focus { border-color: #1A1A1A; }
+.sku-batch-btn {
+  padding: 5px 10px; border: 1px solid #C0B8A0; border-radius: 6px;
+  background: #FFF; color: #5C5546; font-size: 11.5px; cursor: pointer;
+  font-family: inherit; transition: all 0.15s; white-space: nowrap;
+}
+.sku-batch-btn:hover { background: #1A1A1A; color: #FFF; border-color: #1A1A1A; }
 </style>

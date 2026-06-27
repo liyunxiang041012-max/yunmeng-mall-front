@@ -149,7 +149,7 @@ async function send() {
   thinking.value = true
   try {
     const res = await sendAiMessage(payload)
-    const data = res?.data || res
+    const data = res
     const reply = data?.reply || '抱歉，我暂时无法回答这个问题，请稍后再试。'
     messages.value.push({ role: 'ai', text: reply })
     if (data?.sessionId && !sessionId.value) {
@@ -191,7 +191,7 @@ async function restoreHistory() {
   restoring.value = true
   try {
     const res = await getAiHistory(sessionId.value)
-    const data = res?.data || res
+    const data = res
     const list = data?.messages
     if (Array.isArray(list) && list.length > 0) {
       messages.value = list.map(m => ({ role: m.role, text: m.text }))

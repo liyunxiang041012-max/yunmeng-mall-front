@@ -161,7 +161,6 @@ const statusTabs = [
   { key: 'PAID',            label: '待发货' },
   { key: 'SHIPPED',         label: '已发货' },
   { key: 'COMPLETED',       label: '已完成' },
-  { key: 'CANCELLED',       label: '已取消' },
 ]
 
 const statusLabelMap = {
@@ -208,11 +207,14 @@ async function loadOrders() {
     // res = { code:200, data:{ total, pages, list:[...] } }
     const data = res
     if (data && Array.isArray(data.list)) {
-      orders.value = data.list.map(o => ({
+      let mapped = data.list.map(o => ({
         ...o,
         rawStatus: o.status,
         amount: toYuan(o.totalAmount),
       }))
+      // 始终隐藏已取消/超时订单
+      mapped = mapped.filter(o => o.rawStatus !== 'CANCELLED' && o.rawStatus !== 4)
+      orders.value = mapped
       totalPages.value = data.pages || 1
       totalCount.value = data.total || 0
     } else {

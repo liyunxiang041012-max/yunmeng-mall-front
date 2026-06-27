@@ -152,10 +152,10 @@
             <div v-for="cp in coupons" :key="cp.id" class="coupon-card gsap-coupon-card" :class="{ claimed: cp.claimed }">
               <div class="cp-left" :style="{'--cc': cp.color}">
                 <div class="cp-amount">
-                  <span class="cp-unit">¥</span>
+                  <span class="cp-unit" v-if="cp.discountType !== 2">¥</span>
                   <span class="cp-num">{{ cp.amount }}</span>
                 </div>
-                <p class="cp-min">满{{ cp.minOrder }}元</p>
+                <p class="cp-min">{{ cp.minOrder > 0 ? '满'+cp.minOrder+'元' : '无门槛' }}</p>
               </div>
               <div class="cp-divider"></div>
               <div class="cp-right">
@@ -183,7 +183,7 @@
               <span class="tsep">:</span>
               <div class="t-unit"><span class="tnum">{{ seconds }}</span><span class="tlabel">秒</span></div>
             </div>
-            <button class="ghost-btn">查看全部 →</button>
+            <button class="ghost-btn" @click="$router.push('/seckill')">查看全部 →</button>
           </div>
           <div class="flash-grid" ref="flashGridRef">
             <div v-for="item in seckillGoods" :key="item.id" class="flash-card gsap-flash-card">
@@ -300,6 +300,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import router from '@/router'
 import { userLogout } from '@/api/user'
+import { getAvailableCoupons, claimCoupon as claimCouponApi } from '@/api/coupon'
 import nofoundImage from '@/assets/images/nofound.png'
 import lunbo1 from '@/assets/board/lunbo1.png'
 import lunbo2 from '@/assets/board/lunbo2.png'
@@ -402,13 +403,104 @@ const services = ref([
 
 
 
+const goldColors = ['#A07830', '#C9A84C', '#8A6820', '#B89040']
+
+// ── 优惠券（初始硬编码兜底，onMounted 后从接口拉取真实数据替换）──
 const coupons = ref([
-  { id:1, amount:50,  minOrder:299, name:'全品类通用券', expire:'有效期至 2026-03-31', color:'#A07830', claimed:false },
-  { id:2, amount:30,  minOrder:199, name:'数码专区专用', expire:'有效期至 2026-03-25', color:'#C9A84C', claimed:false },
-  { id:3, amount:20,  minOrder:99,  name:'美妆个护专区', expire:'有效期至 2026-04-01', color:'#8A6820', claimed:false },
-  { id:4, amount:100, minOrder:599, name:'家电大额专享', expire:'有效期至 2026-03-20', color:'#B89040', claimed:false },
+  { id:'fallback1', amount:50,  minOrder:299, name:'全品类通用券', expire:'有效期至 2026-03-31', color:'#A07830', claimed:false, discountType:1 },
+  { id:'fallback2', amount:30,  minOrder:199, name:'数码专区专用', expire:'有效期至 2026-03-25', color:'#C9A84C', claimed:false, discountType:1 },
+  { id:'fallback3', amount:20,  minOrder:99,  name:'美妆个护专区', expire:'有效期至 2026-04-01', color:'#8A6820', claimed:false, discountType:1 },
+  { id:'fallback4', amount:100, minOrder:599, name:'家电大额专享', expire:'有效期至 2026-03-20', color:'#B89040', claimed:false, discountType:1 },
 ])
-const claimCoupon = (cp) => { cp.claimed = true }
+
+const formatCouponAmount = (discountValue, discountType) => {
+  if (!discountValue && discountValue !== 0) return '--'
+  const n = Number(discountValue)
+  // 折扣券：discountValue=85 → 8.5折
+  if (discountType === 2 || discountType === 'RATE_DISCOUNT') {
+    return `${(n / 10).toFixed(1).replace('.0', '')}折`
+  }
+  // 满减类：分 → 元
+  return (n / 100).toFixed(n % 100 === 0 ? 0 : 2)
+}
+
+const formatMinOrder = (thresholdAmount) => {
+  if (!thresholdAmount && thresholdAmount !== 0) return 0
+  return Math.round(Number(thresholdAmount) / 100)
+}
+
+const formatExpire = (termEndTime, termDays) => {
+  if (termDays) return `${termDays}天内有效`
+  if (!termEndTime) return ''
+  const s = String(termEndTime)
+  if (s.includes('T')) return s.split('T')[0]
+  if (s.includes(' ')) return s.split(' ')[0]
+  return s
+}
+
+const fetchCoupons = async () => {
+  try {
+    const res = await getAvailableCoupons()
+    const list = Array.isArray(res) ? res : (res?.records ?? res?.list ?? res?.data ?? [])
+    if (!list.length) return
+    const now = Date.now()
+
+    const mapped = list
+      .filter(c => c.available !== false && !c.received)
+      .filter(c => {
+        const begin = c.issueBeginTime ? new Date(String(c.issueBeginTime).replace(/-/g, '/').replace('T', ' ')).getTime() : 0
+        return !begin || now >= begin
+      })
+      .filter(c => {
+        if (c.totalNum && (c.receivedCount || 0) >= c.totalNum) return false
+        return true
+      })
+      .filter(c => {
+        const end = c.issueEndTime ? new Date(String(c.issueEndTime).replace(/-/g, '/').replace('T', ' ')).getTime() : Infinity
+        return now <= end
+      })
+      .filter(c => {
+        const end = c.termEndTime ? new Date(String(c.termEndTime).replace(/-/g, '/').replace('T', ' ')).getTime() : Infinity
+        return now <= end
+      })
+      .sort((a, b) => {
+        const timeA = a.termEndTime ? new Date(String(a.termEndTime).replace(/-/g, '/').replace('T', ' ')).getTime() : Infinity
+        const timeB = b.termEndTime ? new Date(String(b.termEndTime).replace(/-/g, '/').replace('T', ' ')).getTime() : Infinity
+        return timeA - timeB
+      })
+      .slice(0, 4)
+      .map((c, i) => ({
+        id: c.id,
+        name: c.name,
+        discountType: c.discountType,
+        amount: formatCouponAmount(c.discountValue, c.discountType),
+        minOrder: formatMinOrder(c.thresholdAmount),
+        expire: formatExpire(c.termEndTime, c.termDays),
+        color: goldColors[i % 4],
+        claimed: false,
+      }))
+
+    if (mapped.length > 0) coupons.value = mapped
+  } catch (e) {
+    console.error('[首页优惠券] 加载失败:', e)
+  }
+}
+
+const claimCoupon = async (cp) => {
+  if (cp.claimed) return
+  if (!isLogin.value) {
+    ElementPlus.Message({ message: '请先登录后再领取优惠券', type: 'warning', duration: 1500 })
+    router.push('/login')
+    return
+  }
+  try {
+    await claimCouponApi(cp.id)
+    cp.claimed = true
+    ElementPlus.Message({ message: '领取成功！', type: 'success', duration: 1500 })
+  } catch (err) {
+    ElementPlus.Message({ message: err.message || '领取失败，请重试', type: 'error', duration: 2000 })
+  }
+}
 
 const seckillGoods = ref([
   { id:1, name:'极简无线降噪耳机', currentPrice:89,  originalPrice:199, progress:80, image:'https://picsum.photos/300/300?random=1' },
@@ -461,6 +553,8 @@ onMounted(() => {
     if (e.key === 'isLogin') isLogin.value = e.newValue === 'true'
     if (e.key === 'userName') userName.value = e.newValue || ''
   })
+
+  fetchCoupons()
 
 
 })

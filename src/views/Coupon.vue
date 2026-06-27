@@ -50,7 +50,7 @@
           </div>
           <div class="claim-card-top">
             <div class="claim-amount">
-              <span v-if="c.discountType !== 'RATE_DISCOUNT'" class="claim-currency">¥</span>
+              <span v-if="c.discountType !== 2" class="claim-currency">¥</span>
               <span class="claim-value">{{ c.discountAmount }}</span>
             </div>
           </div>
@@ -113,7 +113,7 @@
         >
           <div class="my-card-left">
             <div class="my-card-amount">
-              <span v-if="c.discountType !== 'RATE_DISCOUNT'" class="my-card-currency">¥</span>
+              <span v-if="c.discountType !== 2" class="my-card-currency">¥</span>
               <span class="my-card-value">{{ c.discountAmount }}</span>
             </div>
             <p class="my-card-condition" v-if="c.minAmount > 0">满 {{ c.minAmount }} 可用</p>
@@ -224,9 +224,29 @@ const loadAvailable = async () => {
   try {
     // GET /coupons/list 直接返回数组，非分页
     const res = await getAvailableCoupons()
-    const list = Array.isArray(res) ? res : (res?.data ?? [])
+    // 兼容多种后端返回格式：裸数组 / { list:[] } / { records:[] } / { data:[] }
+    const list = Array.isArray(res) ? res : (res?.records ?? res?.list ?? res?.data ?? [])
+    const now = Date.now()
     availableCoupons.value = list
       .filter(c => c.available !== false)  // 过滤不可领取的券
+      .filter(c => !c.received)            // 过滤当前用户已领取的券
+      .filter(c => {
+        // 过滤未开始发放的券
+        const begin = c.issueBeginTime ? new Date(String(c.issueBeginTime).replace(/-/g, '/').replace('T', ' ')).getTime() : 0
+        if (begin && now < begin) return false
+        return true
+      })
+      .filter(c => {
+        // 过滤已领完的券（totalNum 有值且已领完）
+        if (c.totalNum && (c.receivedCount || 0) >= c.totalNum) return false
+        return true
+      })
+      .filter(c => {
+        // 过滤已过期的券
+        const end = c.issueEndTime ? new Date(String(c.issueEndTime).replace(/-/g, '/').replace('T', ' ')).getTime() : 0
+        if (end && now > end) return false
+        return true
+      })
       .map(c => ({
         id: c.id,
         name: c.name,
@@ -239,6 +259,7 @@ const loadAvailable = async () => {
       }))
   } catch (err) {
     console.error('[可领优惠券] 加载失败:', err)
+    ElMessage.error('加载可领优惠券失败，请稍后重试')
   } finally {
     availableLoading.value = false
   }
@@ -246,12 +267,12 @@ const loadAvailable = async () => {
 
 const formatDiscountType = (type) => {
   const map = {
-    'PRICE_DISCOUNT': '满减券',
-    'PER_PRICE_DISCOUNT': '每满减券',
-    'RATE_DISCOUNT': '折扣券',
-    'NO_THRESHOLD': '无门槛券',
+    1: '每满减券',
+    2: '折扣券',
+    3: '无门槛券',
+    4: '满减券',
   }
-  return map[type] || type || '全场通用'
+  return map[type] || '全场通用'
 }
 
 const handleClaim = async (id) => {
@@ -312,7 +333,8 @@ const loadMyCoupons = async () => {
   try {
     // GET /user-coupons/page 返回 { total, pages, list }，拦截器已解包
     const res = await getMyCoupons({ pageNo: 1, pageSize: 50 })
-    const list = res?.list ?? []
+    // 兼容 MyBatis Plus 分页字段：records（默认）| list
+    const list = res?.records ?? res?.list ?? []
     myCoupons.value = list.map(c => ({
       id: c.id,
       name: c.name,
@@ -325,6 +347,7 @@ const loadMyCoupons = async () => {
     }))
   } catch (err) {
     console.error('[我的优惠券] 加载失败:', err)
+    ElMessage.error('加载我的优惠券失败，请稍后重试')
   } finally {
     myLoading.value = false
   }
@@ -349,18 +372,18 @@ const goShopping = () => {
 const formatAmount = (val, discountType) => {
   if (!val && val !== 0) return '--'
   const n = Number(val)
-  // 折扣券 discountValue 是折扣率(如80=8折)，直接显示；满减类显示金额
-  if (discountType === 'RATE_DISCOUNT') {
+  // 折扣券(discountType=2): discountValue 如 80=8折
+  if (discountType === 2) {
     return `${(n / 10).toFixed(1)}折`.replace('.0折', '折')
   }
-  // 后端金额单位为分，除以100显示元
-  return n > 100 ? (n / 100).toFixed(0) : String(n)
+  // 满减类金额单位为分，除以100显示元
+  return (n / 100).toFixed(n % 100 === 0 ? 0 : 2)
 }
 
 const formatAmountDisplay = (val) => {
   if (!val && val !== 0) return 0
   const n = Number(val)
-  return n > 100 ? (n / 100).toFixed(0) : String(n)
+  return (n / 100).toFixed(n % 100 === 0 ? 0 : 2)
 }
 
 const formatDate = (val) => {

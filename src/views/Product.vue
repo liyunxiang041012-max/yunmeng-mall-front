@@ -419,9 +419,9 @@
   const fetchItemDetail = async (id) => {
     loading.value = true
     try {
-      // request 响应拦截器已返回 res.data，所以这里直接拿
+      // 拦截器已解包 Result<T>
       const res = await request.get(`/it/items/${id}`)
-      const d = res.data ?? res  // 兼容后端是否有 { code, data } 包装
+      const d = res
   
       itemDetail.value  = d
       skuList.value     = d.skus        || []
@@ -467,10 +467,10 @@
     if (!shopId) return
     try {
       const res = await getShopDetail(shopId)
-      shopData.value = res.data ?? res
+      shopData.value = res
       // 并行检查关注状态
       const followRes = await checkFollowShop(shopId)
-      const fd = followRes.data ?? followRes
+      const fd = followRes
       isFollowed.value = fd?.followed ?? fd ?? false
     } catch {
       // 店铺信息加载失败不影响商品展示
@@ -481,7 +481,7 @@
   const checkFavoriteStatus = async (itemId) => {
     try {
       const res = await checkFavorite(itemId)
-      const data = res.data ?? res
+      const data = res
       isFavorited.value = data?.favorited ?? data ?? false
     } catch {
       // 静默失败
@@ -584,11 +584,9 @@
       
       const res = await createOrder(orderDTO)
       
-      // 后端返回 Result<CreateOrderVO>，拦截器解包后 res.data = { orderId, expireTime }
-      const result = res.data || res
-      // result 可能是字符串(orderId)或对象({orderId, expireTime})
-      const orderId = typeof result === 'string' ? result : result.orderId
-      const expireTime = typeof result === 'object' ? result.expireTime : ''
+      // 拦截器已解包 Result<T>，res 即 { orderId, expireTime }
+      const orderId = res?.orderId
+      const expireTime = res?.expireTime || ''
       
       if (!orderId) {
         ElMessage.error('订单创建失败，请重试')
@@ -640,7 +638,7 @@
     reviewLoading.value = true
     try {
       const res = await getComments({ bizId, bizType: 'product', pageNo: 1, pageSize: 50 })
-      const pageData = res?.data ?? res
+      const pageData = res
       const list = Array.isArray(pageData?.list) ? pageData.list : (Array.isArray(pageData) ? pageData : [])
 
       // 收集所有评论 ID 用于批量查点赞状态

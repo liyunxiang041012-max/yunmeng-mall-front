@@ -362,14 +362,19 @@ const handleLogin = async () => {
   if (errors.account) return
   submitting.value = true
   try {
+    // 清除旧 token，防止之前登录过商家端导致身份串号
+    localStorage.removeItem('token')
+    localStorage.removeItem('userRole')
+
     const res = await login({
       account: loginForm.account,
       password: loginForm.password
     })
-    saveLoginState(res.nickname || res.username)
+    saveLoginState(res.nickname || res.username || loginForm.account)
     localStorage.setItem('token', res.token)
+    localStorage.setItem('userRole', res.role ?? 0)
 
-    // 查数据库：city、birthday、province 均非空才算已完善
+    // ── 普通用户(role=0)：检查个人信息是否完善 ──
     try {
       const ok = await getProfileStatus()
       if (!ok) {
@@ -385,7 +390,9 @@ const handleLogin = async () => {
     const redirect = route.query.redirect || '/home'
     router.push(redirect)
   } catch (err) {
-    errors.account = '登录失败，请检查账号密码是否正确'
+    // 优先展示后端返回的错误信息（如 "该账号为商家角色，不可登录商城"）
+    const msg = err?.message || err?.msg || ''
+    errors.account = msg || '登录失败，请检查账号密码是否正确'
   } finally {
     submitting.value = false
   }

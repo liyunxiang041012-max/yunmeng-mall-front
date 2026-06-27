@@ -215,7 +215,7 @@
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { getTopCategories, getItemPage } from '@/api/item'
+import { getTopCategories, getItemPage, getItemDetail } from '@/api/item'
 import { addToCart as apiAddToCart } from '@/api/cart'
 import nofoundImage from '@/assets/images/nofound.png'
 
@@ -391,11 +391,28 @@ const toggleFav = (id) => {
 
 const addToCart = async (item) => {
   try {
+    let skuId = null
+
+    // 优先用搜索接口返回的 skuId（如果后端已加此字段）
+    if (item.skuId) {
+      skuId = item.skuId
+    } else {
+      // 搜索接口没返回 skuId，调商品详情拿默认 SKU
+      const detail = await getItemDetail(item.id)
+      const defaultSku = detail?.skus?.[0]
+      if (!defaultSku?.id) {
+        ElMessage.error('该商品暂无规格，暂时无法加购')
+        return
+      }
+      skuId = defaultSku.id
+    }
+
+    console.log('[搜索页] 加购:', item.name, 'spuId:', item.id, 'skuId:', skuId)
     await apiAddToCart({
-      skuId: item.id,
+      skuId: skuId,
       quantity: 1
     })
-    ElMessage.success(`已加入购物车:${item.name}`)
+    ElMessage.success(`已加入购物车: ${item.name}`)
   } catch (err) {
     ElMessage.error(err.message || '加入购物车失败,请重试')
   }

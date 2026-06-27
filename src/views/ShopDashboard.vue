@@ -467,7 +467,8 @@ onMounted(async () => {
     // orderRes = { code:200, data:{ total, pages, list:[...] } }
     const orderData = orderRes
     if (orderData && Array.isArray(orderData.list)) {
-      const raw = orderData.list.slice(0, 3)
+      // 过滤掉已取消/超时订单
+      const raw = orderData.list.filter(o => o.status !== 'CANCELLED' && o.status !== 4).slice(0, 3)
       recentOrders.value = raw.map(o => ({
         id: o.id,
         orderNo: (o.id || '').slice(-12),

@@ -145,7 +145,7 @@ const loadShopDetail = async () => {
 
   try {
     const res = await getShopDetail(shopId)
-    const data = res.data ?? res
+    const data = res
     shopInfo.value = data
   } catch (err) {
     console.error('加载店铺详情失败:', err)
@@ -161,7 +161,7 @@ const loadShopItems = async () => {
   itemsLoading.value = true
   try {
     const res = await getItemPage({ shopId, sort: activeSort.value })
-    const data = res.data ?? res
+    const data = res
     shopItems.value = Array.isArray(data) ? data : (data?.records ?? [])
   } catch (err) {
     console.error('加载店铺商品失败:', err)
@@ -177,7 +177,7 @@ const checkFollow = async () => {
 
   try {
     const res = await checkFollowShop(shopId)
-    const data = res.data ?? res
+    const data = res
     isFollowed.value = data?.followed ?? data ?? false
   } catch {
     // 静默失败

@@ -225,9 +225,9 @@
                   </tr>
                 </thead>
                 <tbody>
-                  <tr v-for="o in recentOrders" :key="o.id">
+                  <tr v-for="o in recentOrders" :key="o.orderNo">
                     <td class="td-mono">{{ o.orderNo }}</td>
-                    <td>{{ o.user }}</td>
+                    <td>{{ o.user || '-' }}</td>
                     <td>{{ o.product }}</td>
                     <td class="td-price">¥{{ o.amount }}</td>
                     <td><span :class="['status-tag', o.statusClass]">{{ o.status }}</span></td>
@@ -816,6 +816,157 @@
           </div>
         </template>
 
+        <!-- ═══════ 优惠券管理 ═══════ -->
+        <template v-if="activeMenu === 'coupons'">
+          <!-- 统计卡片行 -->
+          <div class="coupon-stats-row">
+            <div class="coupon-stat-card">
+              <div class="csc-icon" style="background:linear-gradient(135deg,#DBEAFE,#3B82F6)"><Ticket :size="18" stroke-width="1.8"/></div>
+              <div class="csc-info">
+                <span class="csc-value">{{ couponStats.total }}</span>
+                <span class="csc-label">券总数</span>
+              </div>
+            </div>
+            <div class="coupon-stat-card">
+              <div class="csc-icon" style="background:linear-gradient(135deg,#D1FAE5,#10B981)"><CheckCircle :size="18" stroke-width="1.8"/></div>
+              <div class="csc-info">
+                <span class="csc-value">{{ couponStats.active }}</span>
+                <span class="csc-label">进行中</span>
+              </div>
+            </div>
+            <div class="coupon-stat-card">
+              <div class="csc-icon" style="background:linear-gradient(135deg,#FEF3C7,#F59E0B)"><Clock :size="18" stroke-width="1.8"/></div>
+              <div class="csc-info">
+                <span class="csc-value">{{ couponStats.pending }}</span>
+                <span class="csc-label">未开始</span>
+              </div>
+            </div>
+            <div class="coupon-stat-card">
+              <div class="csc-icon" style="background:linear-gradient(135deg,#FEE2E2,#EF4444)"><AlertCircle :size="18" stroke-width="1.8"/></div>
+              <div class="csc-info">
+                <span class="csc-value">{{ couponStats.ended }}</span>
+                <span class="csc-label">已结束</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 搜索/筛选工具栏 -->
+          <div class="panel" style="margin-bottom:16px;padding:16px 20px">
+            <div class="um-toolbar">
+              <div class="um-search-box" style="max-width:320px">
+                <Search :size="15" stroke-width="1.6" class="um-search-icon"/>
+                <input
+                  v-model="couponSearch"
+                  type="text"
+                  placeholder="搜索优惠券名称..."
+                  class="um-search-input"
+                  @input="onCouponSearch"
+                />
+                <button v-if="couponSearch" class="um-clear-btn" @click="couponSearch = ''; onCouponSearch()">
+                  <X :size="13" stroke-width="2"/>
+                </button>
+              </div>
+              <select v-model="couponStatusFilter" class="um-select" style="width:130px" @change="onCouponSearch">
+                <option value="">全部状态</option>
+                <option value="active">进行中</option>
+                <option value="pending">未开始</option>
+                <option value="ended">已结束</option>
+              </select>
+              <div style="flex:1"></div>
+              <button class="um-btn um-btn-search" @click="openCouponAdd">
+                <Plus :size="14" stroke-width="2"/> 新建优惠券
+              </button>
+            </div>
+          </div>
+
+          <!-- 加载状态 -->
+          <div v-if="couponListLoading" class="um-loading">
+            <div class="um-spinner"></div>
+            <span>加载优惠券中...</span>
+          </div>
+
+          <!-- 空状态 -->
+          <div v-else-if="filteredCoupons.length === 0 && couponList.length === 0" class="coupon-empty">
+            <div class="coupon-empty-illustration">
+              <svg width="120" height="100" viewBox="0 0 120 100" fill="none">
+                <rect x="18" y="14" width="84" height="54" rx="8" stroke="#CBD5E1" stroke-width="1.5" stroke-dasharray="5 4" fill="#F8FAFC"/>
+                <path d="M18 36 L102 36" stroke="#CBD5E1" stroke-width="1.5" stroke-dasharray="4 3"/>
+                <circle cx="36" cy="24" r="4" fill="#E2E8F0"/>
+                <rect x="44" y="21" width="30" height="6" rx="3" fill="#E2E8F0"/>
+                <rect x="28" y="44" width="20" height="16" rx="3" fill="#DBEAFE" opacity="0.6"/>
+                <rect x="54" y="44" width="32" height="16" rx="3" fill="#F1F5F9"/>
+              </svg>
+            </div>
+            <p class="coupon-empty-title">暂未创建优惠券</p>
+            <p class="coupon-empty-desc">创建优惠券吸引用户，提升下单转化率</p>
+            <button class="um-btn um-btn-search" style="margin-top:20px" @click="openCouponAdd">
+              <Plus :size="14" stroke-width="2"/> 创建第一张优惠券
+            </button>
+          </div>
+
+          <!-- 筛选空结果 -->
+          <div v-else-if="filteredCoupons.length === 0" class="coupon-empty">
+            <Search :size="40" stroke-width="1" style="color:#CBD5E1;margin-bottom:12px"/>
+            <p class="coupon-empty-title">没有匹配的优惠券</p>
+            <p class="coupon-empty-desc">试试调整搜索条件或筛选状态</p>
+          </div>
+
+          <!-- 券卡片网格 -->
+          <div v-else class="coupon-grid">
+            <div
+              v-for="c in filteredCoupons"
+              :key="c.id"
+              :class="['coupon-card', couponCardStatusClass(c)]"
+            >
+              <!-- 左侧色条装饰 -->
+              <div :class="['coupon-card-accent', couponCardAccentClass(c)]"></div>
+
+              <!-- 主体内容 -->
+              <div class="coupon-card-body">
+                <div class="coupon-card-header">
+                  <span :class="['coupon-type-badge', couponTypeBadgeClass(c.discountType)]">
+                    {{ discountTypeMap[c.discountType] || '优惠券' }}
+                  </span>
+                  <div class="coupon-card-actions">
+                    <button class="cc-act-btn" title="编辑" @click="openCouponEdit(c)"><Pencil :size="13" stroke-width="1.8"/></button>
+                    <button class="cc-act-btn danger" title="删除" @click="handleDeleteCoupon(c)"><Trash2 :size="13" stroke-width="1.8"/></button>
+                  </div>
+                </div>
+
+                <h4 class="coupon-card-name">{{ c.name }}</h4>
+
+                <!-- 面额大数字 -->
+                <div class="coupon-card-value">
+                  <span class="ccv-amount">{{ formatCouponValue(c.discountValue, c.discountType) }}</span>
+                  <span v-if="c.thresholdAmount" class="ccv-threshold">满{{ (c.thresholdAmount / 100).toFixed(0) }}元可用</span>
+                  <span v-else class="ccv-threshold">无门槛</span>
+                </div>
+
+                <!-- 元信息 -->
+                <div class="coupon-card-meta">
+                  <div class="ccm-item">
+                    <Calendar :size="12" stroke-width="1.6"/>
+                    <span>{{ formatCouponDateRange(c.issueBeginTime, c.issueEndTime) }}</span>
+                  </div>
+                  <div class="ccm-item">
+                    <Users :size="12" stroke-width="1.6"/>
+                    <span>已领 {{ c.issueNum || 0 }}{{ c.totalNum ? ' / ' + c.totalNum : '' }}</span>
+                  </div>
+                </div>
+
+                <!-- 底部状态栏 -->
+                <div class="coupon-card-footer">
+                  <span :class="['coupon-status-pill', couponStatusClass(c)]">
+                    <span class="csp-dot"></span>
+                    {{ couponStatusText(c) }}
+                  </span>
+                  <span v-if="c.obtainWay === 2" class="coupon-code-hint">兑换码</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </template>
+
         <!-- ══ 用户详情抽屉 ══ -->
         <transition name="drawer-slide">
           <div v-if="detailVisible" class="um-drawer-overlay" @click.self="closeDetail">
@@ -883,6 +1034,170 @@
           </div>
         </transition>
 
+        <!-- ══ 优惠券新增/编辑弹窗 ══ -->
+        <transition name="dialog-fade">
+          <div v-if="couponDialogVisible" class="um-modal-overlay" @click.self="closeCouponDialog">
+            <div class="coupon-modal">
+              <div class="coupon-modal-head">
+                <div class="cmh-left">
+                  <div class="cmh-icon-wrap">
+                    <Ticket :size="20" stroke-width="1.8"/>
+                  </div>
+                  <div>
+                    <h3>{{ couponEditing ? '编辑优惠券' : '创建优惠券' }}</h3>
+                    <p class="cmh-sub">{{ couponEditing ? '修改券面信息，已领取用户不受影响' : '配置优惠规则，吸引用户下单' }}</p>
+                  </div>
+                </div>
+                <button class="umd-close" @click="closeCouponDialog"><X :size="18" stroke-width="1.8"/></button>
+              </div>
+
+              <div class="coupon-modal-body">
+                <!-- 左侧券面预览 -->
+                <div class="cmb-preview">
+                  <div class="cmbp-card" :class="'cmbp-' + couponForm.discountType">
+                    <div class="cmbp-left">
+                      <span class="cmbp-value">
+                        <template v-if="couponForm.discountType === 2">
+                          <em>{{ couponForm.discountValue || '?' }}</em>折
+                        </template>
+                        <template v-else-if="couponForm.discountType === 3">
+                          <em>免</em>
+                        </template>
+                        <template v-else>
+                          <em>¥{{ couponForm.discountValue || '?' }}</em>
+                        </template>
+                      </span>
+                      <span class="cmbp-cond">
+                        {{ couponForm.thresholdAmount && couponForm.discountType !== 3 ? '满' + couponForm.thresholdAmount + '元可用' : '无门槛' }}
+                      </span>
+                    </div>
+                    <div class="cmbp-right">
+                      <span class="cmbp-name">{{ couponForm.name || '优惠券名称' }}</span>
+                      <span class="cmbp-type">{{ discountTypeMap[couponForm.discountType] }}</span>
+                      <span class="cmbp-date">{{ couponForm.issueBeginTime ? couponForm.issueBeginTime.slice(0,10) : '--' }} ~ {{ couponForm.issueEndTime ? couponForm.issueEndTime.slice(0,10) : '--' }}</span>
+                    </div>
+                  </div>
+                  <p class="cmbp-hint">实时预览券面效果</p>
+                </div>
+
+                <!-- 右侧表单 -->
+                <div class="cmb-form">
+                  <div class="cmbf-group">
+                    <label class="cmbf-label">基础信息</label>
+                    <div class="cmbf-field">
+                      <span class="cmbf-tag">名称 <i>*</i></span>
+                      <input v-model="couponForm.name" class="cmbf-input" placeholder="例如：新人专享券、双十一满减券" maxlength="30"/>
+                    </div>
+                    <div class="cmbf-row">
+                      <div class="cmbf-field" style="flex:1">
+                        <span class="cmbf-tag">优惠类型 <i>*</i></span>
+                        <select v-model="couponForm.discountType" class="cmbf-select">
+                          <option :value="4">满减券</option>
+                          <option :value="2">折扣券</option>
+                          <option :value="3">无门槛券</option>
+                          <option :value="1">每满减券</option>
+                        </select>
+                      </div>
+                      <div class="cmbf-field" style="flex:1" v-if="couponForm.discountType !== 3">
+                        <span class="cmbf-tag">
+                          {{ couponForm.discountType === 2 ? '折扣率' : '优惠金额' }} <i>*</i>
+                        </span>
+                        <div class="cmbf-input-wrap">
+                          <span v-if="couponForm.discountType !== 2" class="cmbf-prefix">¥</span>
+                          <input
+                            v-model.number="couponForm.discountValue"
+                            type="number"
+                            class="cmbf-input"
+                            :class="{ 'has-prefix': couponForm.discountType !== 2 }"
+                            :placeholder="couponForm.discountType === 2 ? '8.5' : '10'"
+                            min="0" step="0.01"
+                          />
+                          <span v-if="couponForm.discountType === 2" class="cmbf-suffix">折</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="cmbf-group" v-if="couponForm.discountType !== 3">
+                    <label class="cmbf-label">使用限制</label>
+                    <div class="cmbf-row">
+                      <div class="cmbf-field" style="flex:1">
+                        <span class="cmbf-tag">使用门槛</span>
+                        <div class="cmbf-input-wrap">
+                          <span class="cmbf-prefix">¥</span>
+                          <input v-model.number="couponForm.thresholdAmount" type="number" class="cmbf-input has-prefix" placeholder="留空 = 无门槛" min="0" step="0.01"/>
+                        </div>
+                      </div>
+                      <div class="cmbf-field" style="flex:1" v-if="couponForm.discountType === 2 || couponForm.discountType === 1">
+                        <span class="cmbf-tag">最高优惠</span>
+                        <div class="cmbf-input-wrap">
+                          <span class="cmbf-prefix">¥</span>
+                          <input v-model.number="couponForm.maxDiscountAmount" type="number" class="cmbf-input has-prefix" placeholder="0 = 不限制" min="0" step="0.01"/>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="cmbf-group">
+                    <label class="cmbf-label">发放规则</label>
+                    <div class="cmbf-row">
+                      <div class="cmbf-field" style="flex:1">
+                        <span class="cmbf-tag">获取方式</span>
+                        <select v-model="couponForm.obtainWay" class="cmbf-select">
+                          <option :value="1">手动领取</option>
+                          <option :value="2">兑换码</option>
+                        </select>
+                      </div>
+                      <div class="cmbf-field" style="flex:1">
+                        <span class="cmbf-tag">发行总量</span>
+                        <input v-model.number="couponForm.totalNum" type="number" class="cmbf-input" placeholder="留空 = 不限量" min="0"/>
+                      </div>
+                    </div>
+                    <div class="cmbf-row">
+                      <div class="cmbf-field" style="flex:1">
+                        <span class="cmbf-tag">每人限领</span>
+                        <input v-model.number="couponForm.userLimit" type="number" class="cmbf-input" placeholder="留空 = 不限" min="1"/>
+                      </div>
+                      <div class="cmbf-field" style="flex:1">
+                        <span class="cmbf-tag">有效期(天)</span>
+                        <input v-model.number="couponForm.termDays" type="number" class="cmbf-input" placeholder="0 = 使用起止时间" min="0"/>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="cmbf-group">
+                    <label class="cmbf-label">发放时间</label>
+                    <div class="cmbf-row">
+                      <div class="cmbf-field" style="flex:1">
+                        <span class="cmbf-tag">开始时间 <i>*</i></span>
+                        <input v-model="couponForm.issueBeginTime" type="datetime-local" class="cmbf-input"/>
+                      </div>
+                      <div class="cmbf-field" style="flex:1">
+                        <span class="cmbf-tag">结束时间 <i>*</i></span>
+                        <input v-model="couponForm.issueEndTime" type="datetime-local" class="cmbf-input"/>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="cmbf-group">
+                    <label class="cmbf-check">
+                      <input type="checkbox" v-model="couponForm.specific" />
+                      <span class="cmbf-check-text">限定使用范围（指定商品/分类可用）</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div class="coupon-modal-foot">
+                <button class="um-btn um-btn-reset" @click="closeCouponDialog">取消</button>
+                <button class="um-btn um-btn-search" :disabled="couponSubmitting" @click="handleCouponSubmit">
+                  {{ couponSubmitting ? '提交中...' : (couponEditing ? '保存修改' : '立即创建') }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </transition>
+
       </div>
     </main>
   </div>
@@ -896,12 +1211,14 @@ import {
   LayoutDashboard, TrendingUp, TrendingDown, Users, Package, ShoppingBag,
   ClipboardList, Settings, LogOut, ChevronLeft, ChevronRight, Bell,
   BarChart3, PieChart, DollarSign, Search, X, UserCheck, Shield, RefreshCw, Eye, Ban,
-  FolderTree, FolderOpen, Tag, Pencil, Trash2, ChevronDown, ChevronRight as ChevronRightIcon, Plus, Megaphone, CheckCircle, XCircle, Store
+  FolderTree, FolderOpen, Tag, Ticket, Pencil, Trash2, ChevronDown, ChevronRight as ChevronRightIcon, Plus, Megaphone, CheckCircle, XCircle, Store,
+  Clock, AlertCircle, Calendar
 } from 'lucide-vue-next'
 import { getUserPage, getUserDetail, updateUserStatus, updateUserRole, getAdminOverview, getAdminRevenue, sendAdminNotice } from '../api/admin'
 import { getAllCategories, createCategory, updateCategory, deleteCategory } from '../api/admin'
 import { getAdminItemPage, approveItem, rejectItem, toggleAdminItemStatus } from '../api/admin'
 import { getShopPage, toggleShopStatus } from '../api/admin'
+import { getAdminCouponPage, adminCreateCoupon, adminUpdateCoupon, adminDeleteCoupon } from '../api/admin'
 
 const router = useRouter()
 
@@ -918,6 +1235,7 @@ const menuItems = [
   { key: 'categories',label: '分类管理', icon: FolderTree },
   { key: 'orders',    label: '订单管理', icon: ClipboardList,   badge: '12' },
   { key: 'notices',   label: '系统通知', icon: Megaphone },
+  { key: 'coupons',   label: '优惠券管理', icon: Ticket },
 ]
 
 const currentMenuLabel = computed(() => {
@@ -1019,7 +1337,9 @@ const consumeLevels = ref([
 ])
 
 // ═══ 近期订单 ═══
-const recentOrders = ref([])
+const recentOrders = ref([
+  { orderNo: '—', user: '—', product: '加载中...', amount: '—', status: '—', statusClass: '', time: '—' }
+])
 
 const topProducts = ref([])
 
@@ -1152,6 +1472,7 @@ const fetchOverview = async () => {
   overviewLoading.value = true
   try {
     const data = await getAdminOverview()
+    console.log('[Admin] overview 接口返回:', JSON.stringify(data, null, 2))
     // 指标卡片
     if (data.stats) {
       const keys = ['gmv', 'orders', 'users', 'conversion']
@@ -1166,31 +1487,71 @@ const fetchOverview = async () => {
     // 用户画像（后端返回金色系颜色，映射为蓝色系）
     if (data.userPortrait) {
       const up = { ...data.userPortrait }
-      if (up.ages) {
+      if (up.ages && up.ages.length) {
         up.ages = up.ages.map(a => ({ ...a, color: safeMapColor(a.color) }))
+      } else {
+        // 兜底：后端未返回年龄段数据时使用静态数据
+        up.ages = [
+          { label: '18-24', percent: 28, color: '#2563EB' },
+          { label: '25-34', percent: 42, color: '#18181B' },
+          { label: '35-44', percent: 18, color: '#60A5FA' },
+          { label: '45-54', percent: 8,  color: '#93C5FD' },
+          { label: '55+',   percent: 4,  color: '#BFDBFE' }
+        ]
+      }
+      if (!up.regions || !up.regions.length) {
+        up.regions = [
+          { name: '—', percent: 0 }
+        ]
       }
       userPortrait.value = { ...userPortrait.value, ...up }
     }
     // 消费水平（后端返回金色系颜色，映射为蓝色系）
-    if (data.consumeLevels) {
+    if (data.consumeLevels && data.consumeLevels.length) {
       consumeLevels.value = data.consumeLevels.map(l => ({
         ...l,
         color: safeMapColor(l.color)
       }))
+    } else {
+      // 兜底静态数据
+      consumeLevels.value = [
+        { label: '高消费',   percent: 55, color: '#2563EB' },
+        { label: '中等消费', percent: 25, color: '#18181B' },
+        { label: '低消费',   percent: 20, color: '#93C5FD' }
+      ]
     }
     // 近期订单
-    if (data.recentOrders) {
+    if (data.recentOrders && data.recentOrders.length) {
       recentOrders.value = data.recentOrders
+      console.log(`[Admin] 近期订单: ${data.recentOrders.length} 条`)
+    } else {
+      console.warn('[Admin] recentOrders 为空或缺失，使用兜底占位')
+      recentOrders.value = [
+        { orderNo: '—', user: '—', product: '暂无订单数据', amount: '—', status: '—', statusClass: '', time: '—' }
+      ]
     }
     // 热销商品（topProducts.color 也需要映射）
-    if (data.topProducts) {
+    if (data.topProducts && data.topProducts.length) {
       topProducts.value = data.topProducts.map(p => ({
         ...p,
+        revenue: String(p.revenue || '').replace(/^¥/, ''),
         color: safeMapColor(p.color)
       }))
+    } else {
+      // 兜底占位数据
+      topProducts.value = [
+        { name: '暂无数据', sales: '—', revenue: '—', color: '#DBEAFE' }
+      ]
     }
   } catch (e) {
-    // 失败时保留默认占位数据
+    console.error('[Admin] overview 请求失败:', e)
+    ElMessage.error('加载概览数据失败，请检查后端服务是否正常')
+    // 失败时显示占位
+    if (!recentOrders.value.length) {
+      recentOrders.value = [
+        { orderNo: '—', user: '—', product: '数据加载失败', amount: '—', status: '—', statusClass: '', time: '—' }
+      ]
+    }
   } finally {
     overviewLoading.value = false
   }
@@ -1200,12 +1561,16 @@ const fetchRevenue = async (period) => {
   revenueLoading.value = true
   try {
     const data = await getAdminRevenue(period)
-    if (data && data.values) {
+    console.log(`[Admin] revenue period=${period} 返回:`, JSON.stringify(data))
+    if (data && data.values && data.values.length) {
       if (period === '30天') revenueData30.value = data.values
       else if (period === '季度') revenueDataQ.value = data.values
       else revenueData7.value = data.values
+    } else {
+      console.warn(`[Admin] revenue period=${period} 返回空数据，保留默认值`)
     }
   } catch (e) {
+    console.error(`[Admin] revenue period=${period} 请求失败:`, e)
     // 失败保留现有数据
   } finally {
     revenueLoading.value = false
@@ -1644,6 +2009,257 @@ async function handleToggleShop(s) {
 // 切换到商家管理时自动加载
 watch(activeMenu, (val) => {
   if (val === 'shops' && shopList.value.length === 0) loadShops()
+})
+
+// ═══ 优惠券管理 ═══
+const couponList = ref([])
+const couponListLoading = ref(false)
+const couponDialogVisible = ref(false)
+const couponEditing = ref(false)
+const couponEditingId = ref(null)
+const couponSubmitting = ref(false)
+
+// 搜索 & 筛选
+const couponSearch = ref('')
+const couponStatusFilter = ref('')
+
+// 统计
+const couponStats = computed(() => {
+  const now = Date.now()
+  let active = 0, pending = 0, ended = 0
+  couponList.value.forEach(c => {
+    const end = c.issueEndTime ? new Date(String(c.issueEndTime).replace(/-/g, '/').replace('T', ' ')).getTime() : 0
+    const start = c.issueBeginTime ? new Date(String(c.issueBeginTime).replace(/-/g, '/').replace('T', ' ')).getTime() : 0
+    if (end && now > end) ended++
+    else if (c.totalNum && c.issueNum >= c.totalNum) ended++
+    else if (start && now < start) pending++
+    else active++
+  })
+  return { total: couponList.value.length, active, pending, ended }
+})
+
+// 过滤后列表
+const filteredCoupons = computed(() => {
+  let list = couponList.value
+  if (couponSearch.value.trim()) {
+    const kw = couponSearch.value.trim().toLowerCase()
+    list = list.filter(c => c.name && c.name.toLowerCase().includes(kw))
+  }
+  if (couponStatusFilter.value) {
+    const now = Date.now()
+    list = list.filter(c => {
+      const end = c.issueEndTime ? new Date(String(c.issueEndTime).replace(/-/g, '/').replace('T', ' ')).getTime() : 0
+      const start = c.issueBeginTime ? new Date(String(c.issueBeginTime).replace(/-/g, '/').replace('T', ' ')).getTime() : 0
+      if (couponStatusFilter.value === 'ended') return (end && now > end) || (c.totalNum && c.issueNum >= c.totalNum)
+      if (couponStatusFilter.value === 'pending') return start && now < start
+      if (couponStatusFilter.value === 'active') {
+        if (end && now > end) return false
+        if (c.totalNum && c.issueNum >= c.totalNum) return false
+        return !(start && now < start)
+      }
+      return true
+    })
+  }
+  return list
+})
+
+const onCouponSearch = () => {} // 搜索由computed自动响应
+
+// 卡片样式辅助
+const couponCardStatusClass = (c) => {
+  const now = Date.now()
+  const end = c.issueEndTime ? new Date(String(c.issueEndTime).replace(/-/g, '/').replace('T', ' ')).getTime() : 0
+  if (end && now > end) return 'is-ended'
+  if (c.totalNum && c.issueNum >= c.totalNum) return 'is-ended'
+  return ''
+}
+
+const couponCardAccentClass = (c) => {
+  if (c.discountType === 3) return 'accent-free'
+  if (c.discountType === 1) return 'accent-per'
+  if (c.discountType === 2) return 'accent-discount'
+  return 'accent-full'
+}
+
+const couponTypeBadgeClass = (type) => {
+  if (type === 3) return 'badge-free'
+  if (type === 1) return 'badge-per'
+  if (type === 2) return 'badge-discount'
+  return 'badge-full'
+}
+
+const defaultCouponForm = () => ({
+  name: '',
+  discountType: 4,
+  specific: false,
+  discountValue: null,
+  thresholdAmount: null,
+  maxDiscountAmount: 0,
+  obtainWay: 1,
+  issueBeginTime: '',
+  issueEndTime: '',
+  termDays: 0,
+  totalNum: null,
+  userLimit: null,
+})
+const couponForm = ref(defaultCouponForm())
+
+const discountTypeMap = {
+  1: '每满减券',
+  2: '折扣券',
+  3: '无门槛券',
+  4: '满减券',
+}
+
+const formatCouponValue = (val, type) => {
+  if (!val && val !== 0) return '--'
+  if (type === 2) return (Number(val) / 10).toFixed(1) + '折'
+  return '¥' + (Number(val) / 100).toFixed(2)
+}
+
+const formatCouponDateRange = (start, end) => {
+  const fmt = (v) => {
+    if (!v) return ''
+    const d = new Date(String(v).replace(/-/g, '/').replace('T', ' '))
+    if (isNaN(d.getTime())) return v
+    return `${d.getMonth()+1}.${d.getDate()}`
+  }
+  return `${fmt(start)} - ${fmt(end)}`
+}
+
+const couponStatusClass = (c) => {
+  const now = Date.now()
+  const end = c.issueEndTime ? new Date(String(c.issueEndTime).replace(/-/g, '/').replace('T', ' ')).getTime() : 0
+  if (end && now > end) return 'off'
+  if (c.totalNum && c.issueNum >= c.totalNum) return 'off'
+  return 'on'
+}
+
+const couponStatusText = (c) => {
+  const now = Date.now()
+  const end = c.issueEndTime ? new Date(String(c.issueEndTime).replace(/-/g, '/').replace('T', ' ')).getTime() : 0
+  if (end && now > end) return '已过期'
+  if (c.totalNum && c.issueNum >= c.totalNum) return '已领完'
+  const start = c.issueBeginTime ? new Date(String(c.issueBeginTime).replace(/-/g, '/').replace('T', ' ')).getTime() : 0
+  if (start && now < start) return '未开始'
+  return '进行中'
+}
+
+const loadCoupons = async () => {
+  couponListLoading.value = true
+  try {
+    const res = await getAdminCouponPage({ pageNo: 1, pageSize: 100 })
+    const list = res?.records ?? res?.list ?? []
+    if (list.length > 0) {
+      console.log('[管理端] 优惠券列表第一条 keys:', Object.keys(list[0]))
+      console.log('[管理端] 优惠券列表第一条:', JSON.stringify(list[0], null, 2))
+      console.log('[管理端] receivedCount 字段值:', list[0].receivedCount, 'type:', typeof list[0].receivedCount)
+    }
+    couponList.value = list
+  } catch (e) {
+    console.error('加载优惠券失败:', e)
+    ElMessage.error('加载优惠券列表失败')
+  } finally {
+    couponListLoading.value = false
+  }
+}
+
+const openCouponAdd = () => {
+  couponEditing.value = false
+  couponEditingId.value = null
+  couponForm.value = defaultCouponForm()
+  couponDialogVisible.value = true
+}
+
+const openCouponEdit = (c) => {
+  couponEditing.value = true
+  couponEditingId.value = c.id
+  couponForm.value = {
+    name: c.name || '',
+    discountType: c.discountType ?? 4,
+    specific: c.specific || false,
+    discountValue: c.discountType === 2 ? c.discountValue : (c.discountValue ? Number(c.discountValue) / 100 : null),
+    thresholdAmount: c.thresholdAmount ? Number(c.thresholdAmount) / 100 : null,
+    maxDiscountAmount: c.maxDiscountAmount ? Number(c.maxDiscountAmount) / 100 : 0,
+    obtainWay: c.obtainWay ?? 1,
+    issueBeginTime: c.issueBeginTime ? toDatetimeLocal(c.issueBeginTime) : '',
+    issueEndTime: c.issueEndTime ? toDatetimeLocal(c.issueEndTime) : '',
+    termDays: c.termDays ?? 0,
+    totalNum: c.totalNum ?? null,
+    userLimit: c.userLimit ?? null,
+  }
+  couponDialogVisible.value = true
+}
+
+const toDatetimeLocal = (val) => {
+  const d = new Date(String(val).replace(/-/g, '/').replace('T', ' '))
+  if (isNaN(d.getTime())) return ''
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+const closeCouponDialog = () => {
+  couponDialogVisible.value = false
+  couponForm.value = defaultCouponForm()
+}
+
+const handleCouponSubmit = async () => {
+  const f = couponForm.value
+  if (!f.name.trim()) return ElMessage.error('请输入优惠券名称')
+  if (!f.issueBeginTime) return ElMessage.error('请选择发放开始时间')
+  if (!f.issueEndTime) return ElMessage.error('请选择发放结束时间')
+  if (f.discountType !== 3 && !f.discountValue && f.discountValue !== 0) {
+    return ElMessage.error('请输入优惠面额')
+  }
+
+  couponSubmitting.value = true
+  try {
+    const payload = {
+      name: f.name.trim(),
+      discountType: f.discountType,
+      specific: f.specific,
+      discountValue: f.discountType === 2 ? f.discountValue : (f.discountValue ? Math.round(f.discountValue * 100) : 0),
+      thresholdAmount: f.thresholdAmount ? Math.round(f.thresholdAmount * 100) : 0,
+      maxDiscountAmount: f.maxDiscountAmount ? Math.round(f.maxDiscountAmount * 100) : 0,
+      obtainWay: f.obtainWay,
+      issueBeginTime: f.issueBeginTime.replace('T', ' ') + ':00',
+      issueEndTime: f.issueEndTime.replace('T', ' ') + ':00',
+      termDays: f.termDays || 0,
+      totalNum: f.totalNum || null,
+      userLimit: f.userLimit || null,
+    }
+    if (couponEditing.value) {
+      await adminUpdateCoupon(couponEditingId.value, payload)
+      ElMessage.success('优惠券已更新')
+    } else {
+      await adminCreateCoupon(payload)
+      ElMessage.success('优惠券已创建')
+    }
+    closeCouponDialog()
+    loadCoupons()
+  } catch (e) {
+    ElMessage.error(e.message || '操作失败')
+  } finally {
+    couponSubmitting.value = false
+  }
+}
+
+const handleDeleteCoupon = async (c) => {
+  try {
+    await ElMessageBox.confirm(`确定要删除优惠券「${c.name}」吗？已领取的用户将无法使用。`, '确认删除', {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+    await adminDeleteCoupon(c.id)
+    ElMessage.success('已删除')
+    loadCoupons()
+  } catch { /* 取消 */ }
+}
+
+// 切换到优惠券管理时自动加载
+watch(activeMenu, (val) => {
+  if (val === 'coupons' && couponList.value.length === 0) loadCoupons()
 })
 </script>
 
@@ -2223,7 +2839,271 @@ watch(activeMenu, (val) => {
 }
 .um-filter-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 
-/* ══ IMAGE ZOOM LIGHTBOX ══ */
+/* ══ COUPON MANAGEMENT - 大厂风格 ══ */
+/* Stats Row */
+.coupon-stats-row {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px;
+}
+.coupon-stat-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  padding: 18px 20px; display: flex; align-items: center; gap: 14px;
+  transition: all var(--transition);
+}
+.coupon-stat-card:hover {
+  transform: translateY(-2px); box-shadow: var(--shadow-lg); border-color: var(--accent-light);
+}
+.csc-icon {
+  width: 42px; height: 42px; border-radius: 11px;
+  display: flex; align-items: center; justify-content: center;
+  color: #FFF; flex-shrink: 0;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+.csc-info { display: flex; flex-direction: column; gap: 2px; }
+.csc-value { font-size: 24px; font-weight: 700; color: var(--text-primary); font-family: var(--font-mono); letter-spacing: -0.5px; line-height: 1; }
+.csc-label { font-size: 12px; color: var(--text-tertiary); font-weight: 500; }
+
+/* Empty State */
+.coupon-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 64px 20px; text-align: center;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+}
+.coupon-empty-illustration { margin-bottom: 20px; }
+.coupon-empty-title { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
+.coupon-empty-desc { font-size: 13px; color: var(--text-tertiary); }
+
+/* Card Grid */
+.coupon-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px;
+}
+
+/* Coupon Card */
+.coupon-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  overflow: hidden; display: flex;
+  transition: all var(--transition);
+  position: relative;
+}
+.coupon-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.04);
+  border-color: #CBD5E1;
+}
+.coupon-card.is-ended { opacity: 0.55; }
+.coupon-card.is-ended:hover { opacity: 0.7; }
+
+/* Left accent bar */
+.coupon-card-accent {
+  width: 4px; flex-shrink: 0;
+  background: linear-gradient(180deg, #3B82F6, #2563EB);
+}
+.coupon-card-accent.accent-free { background: linear-gradient(180deg, #10B981, #059669); }
+.coupon-card-accent.accent-per { background: linear-gradient(180deg, #F59E0B, #D97706); }
+.coupon-card-accent.accent-discount { background: linear-gradient(180deg, #8B5CF6, #7C3AED); }
+
+.coupon-card-body {
+  flex: 1; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; min-width: 0;
+}
+
+/* Header */
+.coupon-card-header {
+  display: flex; align-items: center; justify-content: space-between;
+}
+
+.coupon-type-badge {
+  display: inline-block; padding: 3px 10px; border-radius: 6px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.2px;
+  background: #EFF6FF; color: #1D4ED8;
+}
+.coupon-type-badge.badge-free { background: #ECFDF5; color: #059669; }
+.coupon-type-badge.badge-per { background: #FFFBEB; color: #D97706; }
+.coupon-type-badge.badge-discount { background: #F5F3FF; color: #7C3AED; }
+
+.coupon-card-actions { display: flex; gap: 4px; opacity: 0; transition: opacity 0.15s; }
+.coupon-card:hover .coupon-card-actions { opacity: 1; }
+.cc-act-btn {
+  width: 30px; height: 30px; border-radius: 7px;
+  border: 1.5px solid var(--border); background: var(--surface);
+  color: var(--text-tertiary);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all var(--transition);
+}
+.cc-act-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.cc-act-btn.danger:hover { border-color: #EF4444; color: #EF4444; background: #FEF2F2; }
+
+/* Name */
+.coupon-card-name {
+  font-size: 14px; font-weight: 600; color: var(--text-primary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Value */
+.coupon-card-value {
+  display: flex; align-items: baseline; gap: 10px;
+}
+.ccv-amount {
+  font-size: 28px; font-weight: 700; color: #EF4444;
+  font-family: var(--font-mono); letter-spacing: -1px; line-height: 1;
+}
+.coupon-card.is-ended .ccv-amount { color: #9CA3AF; }
+.ccv-threshold {
+  font-size: 12px; color: var(--text-tertiary); font-weight: 500;
+  background: var(--border-light); padding: 2px 8px; border-radius: 4px;
+}
+
+/* Meta */
+.coupon-card-meta {
+  display: flex; flex-direction: column; gap: 5px;
+}
+.ccm-item {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--text-tertiary);
+}
+.ccm-item svg { color: var(--text-tertiary); flex-shrink: 0; }
+
+/* Footer */
+.coupon-card-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  padding-top: 8px; border-top: 1px solid var(--border-light);
+}
+.coupon-status-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 500;
+}
+.csp-dot { width: 6px; height: 6px; border-radius: 50%; }
+.coupon-status-pill.on .csp-dot { background: #10B981; box-shadow: 0 0 6px rgba(16,185,129,0.4); }
+.coupon-status-pill.on { color: #059669; }
+.coupon-status-pill.off .csp-dot { background: #9CA3AF; }
+.coupon-status-pill.off { color: #9CA3AF; }
+.coupon-code-hint {
+  font-size: 10px; padding: 2px 8px; border-radius: 4px;
+  background: #FFF7ED; color: #EA580C; font-weight: 600;
+}
+
+/* ══ COUPON MODAL ══ */
+.coupon-modal {
+  width: 820px; max-width: 94vw; max-height: 86vh;
+  background: var(--surface); border-radius: 16px; overflow: hidden;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.18);
+  display: flex; flex-direction: column;
+}
+.coupon-modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 24px 28px; border-bottom: 1px solid var(--border-light); flex-shrink: 0;
+}
+.cmh-left { display: flex; align-items: center; gap: 14px; }
+.cmh-icon-wrap {
+  width: 44px; height: 44px; border-radius: 12px;
+  background: linear-gradient(135deg, #DBEAFE, #2563EB);
+  display: flex; align-items: center; justify-content: center; color: #FFF;
+  box-shadow: 0 4px 12px rgba(37,99,235,0.2);
+}
+.cmh-left h3 { font-size: 17px; font-weight: 600; color: var(--text-primary); }
+.cmh-sub { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+
+.coupon-modal-body {
+  display: flex; flex: 1; overflow: hidden;
+}
+
+/* Preview Panel */
+.cmb-preview {
+  width: 280px; flex-shrink: 0;
+  background: #F8FAFC; border-right: 1px solid var(--border-light);
+  padding: 28px 24px;
+  display: flex; flex-direction: column; align-items: center;
+}
+.cmbp-card {
+  width: 100%; border-radius: 12px; overflow: hidden;
+  display: flex; height: 120px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+}
+.cmbp-left {
+  width: 110px; flex-shrink: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px; color: #FFF;
+}
+.cmbp-4 .cmbp-left { background: linear-gradient(135deg, #3B82F6, #2563EB); }
+.cmbp-3 .cmbp-left { background: linear-gradient(135deg, #10B981, #059669); }
+.cmbp-2 .cmbp-left { background: linear-gradient(135deg, #8B5CF6, #7C3AED); }
+.cmbp-1 .cmbp-left { background: linear-gradient(135deg, #F59E0B, #D97706); }
+.cmbp-value { font-size: 14px; font-weight: 500; letter-spacing: 0.5px; }
+.cmbp-value em { font-size: 28px; font-weight: 700; font-style: normal; letter-spacing: -1px; }
+.cmbp-cond { font-size: 11px; opacity: 0.8; }
+.cmbp-right {
+  flex: 1; background: #FFF;
+  display: flex; flex-direction: column; justify-content: center;
+  padding: 16px; gap: 4px; min-width: 0;
+}
+.cmbp-name { font-size: 13px; font-weight: 600; color: #18181B; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cmbp-type { font-size: 11px; color: var(--text-tertiary); }
+.cmbp-date { font-size: 10px; color: #CBD5E1; font-family: var(--font-mono); }
+.cmbp-hint { font-size: 11px; color: #CBD5E1; margin-top: 16px; }
+
+/* Form Panel */
+.cmb-form {
+  flex: 1; overflow-y: auto; padding: 24px 28px;
+  display: flex; flex-direction: column; gap: 20px;
+}
+.cmbf-group { display: flex; flex-direction: column; gap: 10px; }
+.cmbf-label {
+  font-size: 11px; font-weight: 600; color: var(--text-tertiary);
+  letter-spacing: 1px; text-transform: uppercase;
+  padding-bottom: 4px; border-bottom: 1px solid var(--border-light);
+}
+.cmbf-row { display: flex; gap: 12px; }
+.cmbf-field { display: flex; flex-direction: column; gap: 5px; }
+.cmbf-tag { font-size: 12px; font-weight: 500; color: var(--text-secondary); }
+.cmbf-tag i { color: #EF4444; font-style: normal; margin-left: 1px; }
+.cmbf-input-wrap { position: relative; display: flex; align-items: center; }
+.cmbf-prefix {
+  position: absolute; left: 12px; font-size: 13px; color: var(--text-tertiary);
+  font-weight: 600; z-index: 1; pointer-events: none;
+}
+.cmbf-suffix {
+  position: absolute; right: 12px; font-size: 12px; color: var(--text-tertiary);
+  font-weight: 600; z-index: 1; pointer-events: none;
+}
+.cmbf-input {
+  width: 100%; padding: 9px 13px; border: 1.5px solid var(--border); border-radius: 9px;
+  font-family: inherit; font-size: 13px; color: var(--text-primary);
+  background: var(--bg); outline: none;
+  transition: all var(--transition);
+}
+.cmbf-input.has-prefix { padding-left: 28px; }
+.cmbf-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); background: var(--surface); }
+.cmbf-select {
+  width: 100%; padding: 9px 32px 9px 13px; border: 1.5px solid var(--border); border-radius: 9px;
+  font-family: inherit; font-size: 13px; color: var(--text-primary);
+  background: var(--bg); outline: none;
+  -webkit-appearance: none; appearance: none; cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='%23A1A1AA' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center;
+  transition: all var(--transition);
+}
+.cmbf-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); background: var(--surface); }
+.cmbf-check {
+  display: flex; align-items: center; gap: 8px; cursor: pointer;
+}
+.cmbf-check input[type="checkbox"] {
+  width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer;
+}
+.cmbf-check-text { font-size: 13px; color: var(--text-secondary); user-select: none; }
+
+/* Modal Footer */
+.coupon-modal-foot {
+  display: flex; justify-content: flex-end; gap: 10px;
+  padding: 16px 28px; border-top: 1px solid var(--border-light);
+  background: var(--bg); flex-shrink: 0;
+}
+
+/* Responsive */
+@media(max-width: 860px) {
+  .coupon-modal { max-width: 98vw; }
+  .coupon-modal-body { flex-direction: column; }
+  .cmb-preview { width: 100%; padding: 20px; flex-direction: row; align-items: flex-start; gap: 20px; }
+  .cmbp-card { width: 220px; flex-shrink: 0; }
+  .cmb-form { padding: 20px; }
+}
 .img-zoom-overlay {
   position: fixed; inset: 0; z-index: 2000;
   background: rgba(0,0,0,0.78); backdrop-filter: blur(8px);

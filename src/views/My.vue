@@ -125,7 +125,7 @@
         <div v-for="c in myCouponPreview" :key="c.id" :class="['cip-card', { 'cip-used': c.status === 'used', 'cip-expired': c.status === 'expired' }]">
           <div class="cip-left">
             <div class="cip-amount">
-              <span v-if="c.discountType !== 'RATE_DISCOUNT'" class="cip-unit">¥</span>
+              <span v-if="c.discountType !== 2" class="cip-unit">¥</span>
               <span class="cip-value">{{ c.discountAmount }}</span>
             </div>
             <span class="cip-condition" v-if="c.minAmount > 0">满 ¥{{ c.minAmount }} 可用</span>
@@ -586,7 +586,8 @@ const userInfo = ref({
 const loadUserInfo = async () => {
   try {
     const res = await getUserDetail()
-    const data = res.data || {}
+    // 拦截器已解包 Result<T>，res 即 data 内容
+    const data = res || {}
     const rawAvatar = data.avatar
     userInfo.value = {
       id:         data.id || '',
@@ -637,7 +638,7 @@ const statusMap = {
 const orders = ref([])
 
 const orderStatuses = computed(() => {
-  const counts = { '待付款': 0, '待发货': 0, '待收货': 0, '已完成': 0, '已取消': 0, '退款售后': 0 }
+  const counts = { '待付款': 0, '待发货': 0, '待收货': 0, '已完成': 0, '退款售后': 0 }
   orders.value.forEach(o => {
     if (counts[o.status] !== undefined) counts[o.status]++
   })
@@ -647,7 +648,6 @@ const orderStatuses = computed(() => {
     { label: '待发货',   icon: '📦', count: counts['待发货']   },
     { label: '待收货',   icon: '🚚', count: counts['待收货']   },
     { label: '已完成',   icon: '✓',  count: counts['已完成']   },
-    { label: '已取消',   icon: '✕',  count: counts['已取消']   },
     { label: '退款售后', icon: '↩️', count: counts['退款售后'] },
   ]
 })
@@ -656,7 +656,8 @@ const loadOrders = async () => {
   orderLoading.value = true
   try {
     const res = await getUserOrders()
-    const list = res.data || []
+    // 拦截器已解包 Result<T>，res 即 data 内容
+    const list = res || []
     console.log('[订单列表] 后端返回:', JSON.stringify(list.map(o => ({ id: o.id, status: o.status, statusType: typeof o.status, expireTime: o.expireTime }))))
     // 并行获取每个订单的商品明细
     const ordersWithItems = await Promise.all(
@@ -665,7 +666,8 @@ const loadOrders = async () => {
         let goods = []
         try {
           const itemsRes = await getOrderItems(order.id)
-          const itemsData = itemsRes.data || []
+          // 拦截器已解包，直接取
+          const itemsData = itemsRes || []
           goods = itemsData.map(item => ({
             id: item.id,
             image: item.image || item.imageUrl || '',
@@ -704,7 +706,11 @@ const loadOrders = async () => {
   }
 }
 
-const filteredOrders = computed(() => orderTab.value === '全部' ? orders.value : orders.value.filter(o => o.status === orderTab.value))
+const filteredOrders = computed(() => {
+  // 始终隐藏已取消/超时订单
+  const valid = orders.value.filter(o => o.rawStatus !== 4 && o.rawStatus !== 'CANCELLED')
+  return orderTab.value === '全部' ? valid : valid.filter(o => o.status === orderTab.value)
+})
 const toggleLogistics = (id) => { expandedOrder.value = expandedOrder.value === id ? null : id }
 
 // ─── 订单倒计时 ─────────────────────────────────────────────────
@@ -789,7 +795,8 @@ const loadAddr = async () => {
   addrLoading.value = true
   try {
     const res = await getMyAddresses()
-    addresses.value = (res.data || []).map(item => ({
+    // 拦截器已解包 Result<T>，res 即 data 内容
+    addresses.value = (res || []).map(item => ({
       id:        item.id,
       name:      item.receiver,
       phone:     item.phone,
@@ -832,8 +839,8 @@ const loadHistory = async () => {
   historyLoading.value = true
   try {
     const res = await getBrowseHistory({ page: 1, size: 20 })
-    // 后端返回 PageDTO 分页结构，数据在 data.list 中
-    const pageData = res?.data ?? res
+    // 拦截器已解包 Result<T>
+    const pageData = res
     const list = Array.isArray(pageData?.list) ? pageData.list : []
     footprintTotal.value = pageData?.total ?? list.length
     historyItems.value = list.map(h => ({
@@ -887,8 +894,8 @@ const loadFavorites = async () => {
   favLoading.value = true
   try {
     const res = await getMyFavorites({ page: 1, size: 20 })
-    // 后端返回 PageDTO 分页结构，数据在 data.list 中
-    const pageData = res?.data ?? res
+    // 拦截器已解包 Result<T>
+    const pageData = res
     const list = Array.isArray(pageData?.list) ? pageData.list : []
     favItems.value = list.map(item => ({
       id: item.id ?? item.itemId,
@@ -912,7 +919,8 @@ const myCouponLoading = ref(false)
 const formatCouponAmount = (val, discountType) => {
   if (!val && val !== 0) return '--'
   const n = Number(val)
-  if (discountType === 'RATE_DISCOUNT') {
+  // 折扣券(discountType=2): 如 80=8折
+  if (discountType === 2) {
     return `${(n / 10).toFixed(1)}折`.replace('.0折', '折')
   }
   return n > 100 ? (n / 100).toFixed(0) : String(n)
@@ -920,12 +928,12 @@ const formatCouponAmount = (val, discountType) => {
 
 const formatCouponDiscountType = (type) => {
   const map = {
-    'PRICE_DISCOUNT': '满减券',
-    'PER_PRICE_DISCOUNT': '每满减券',
-    'RATE_DISCOUNT': '折扣券',
-    'NO_THRESHOLD': '无门槛券',
+    1: '每满减券',
+    2: '折扣券',
+    3: '无门槛券',
+    4: '满减券',
   }
-  return map[type] || type || '全场通用'
+  return map[type] || '全场通用'
 }
 
 const normalizeCouponStatus = (s) => {
@@ -1082,7 +1090,7 @@ const loadFollows = async () => {
   followLoading.value = true
   try {
     const res = await getMyFollows({ page: 1, size: 50 })
-    const pageData = res?.data ?? res
+    const pageData = res
     const list = Array.isArray(pageData?.list) ? pageData.list : (Array.isArray(pageData) ? pageData : [])
     followedShops.value = list.map(s => ({
       id: s.id ?? s.shopId,

@@ -5,6 +5,9 @@
       <!-- ══ 页头 ══ -->
       <div class="cart-header">
         <div class="ch-left">
+          <button class="ch-back" @click="$router.push('/home')" title="返回首页">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
           <h1 class="ch-title">购物车</h1>
           <span class="ch-count">{{ totalCount }} 件商品</span>
         </div>
@@ -236,6 +239,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus' 
 import { getCartList, deleteCartItems, addToCart as addCartItemApi, updateCartItem } from '@/api/cart'
 import { createOrder } from '@/api/order'
+import { getMyCoupons } from '@/api/coupon'
 import nofoundImage from '@/assets/images/nofound.png'
 
 const router = useRouter()
@@ -249,10 +253,33 @@ const handleImageError = (e) => {
 const cartItems = ref([])
 const showCoupon = ref(false)
 const appliedCoupon = ref(null)
-const availableCoupons = ref([
-  { id: 1, discount: 50, minOrder: 299, name: '全品类通用券' },
-  { id: 2, discount: 30, minOrder: 199, name: '数码专区专用' },
-])
+const availableCoupons = ref([])
+
+const loadCartCoupons = async () => {
+  console.log('[购物车] 开始加载用户优惠券...')
+  try {
+    const res = await getMyCoupons({ pageNo: 1, pageSize: 50, status: 1 })
+    console.log('[购物车] 优惠券接口返回:', JSON.stringify(res))
+    const list = res?.records ?? res?.list ?? []
+    console.log('[购物车] 解析后列表:', list.length, '条')
+    if (list.length > 0) {
+      console.log('[购物车] ⚠️ 第一条券 raw id:', list[0]?.id, 'typeof:', typeof list[0]?.id)
+      console.log('[购物车] ⚠️ 如果 typeof=number → 后端没重启，Jackson 修复未生效！')
+    }
+    availableCoupons.value = list
+      .filter(c => c.discountType !== 2) // 暂不支持折扣券，只显示满减/无门槛券
+      .map(c => ({
+        id: String(c.id),                                 // userCouponId，String() 防雪花ID精度丢失
+        discount: Math.floor((c.discountValue || 0) / 100), // 分→元
+        minOrder: Math.floor((c.thresholdAmount || 0) / 100), // 分→元
+        name: c.name,
+        discountType: c.discountType,
+      }))
+    console.log('[购物车] 可用优惠券:', availableCoupons.value.length, '张', JSON.stringify(availableCoupons.value))
+  } catch (err) {
+    console.error('加载购物车优惠券失败:', err)
+  }
+}
 const recommendItems = ref([
   { id: 101, name: '智能温控随行杯保温', price: 168, image: 'https://picsum.photos/280/280?random=10' },
   { id: 102, name: '手工研磨挂耳咖啡礼盒', price: 89, image: 'https://picsum.photos/280/280?random=11' },
@@ -270,9 +297,13 @@ const loadCartData = async () => {
     const res = await getCartList()
     console.log('购物车接口返回的原始 res:', res)
     
-    // 兼容不同的 Axios 拦截器返回格式
-    const rawData = res.data || res 
-    const items = Array.isArray(rawData) ? rawData : []
+    // 兼容不同响应格式：数组直接、对象取 list、兜底空数组
+    let items = []
+    if (Array.isArray(res)) {
+      items = res
+    } else if (res && Array.isArray(res.list)) {
+      items = res.list
+    }
     
     items.forEach(item => {
       item.qty = item.quantity || 1
@@ -318,7 +349,7 @@ const loadCartData = async () => {
 }
 
 
-onMounted(() => loadCartData())
+onMounted(() => { loadCartData(); loadCartCoupons() })
 
 // ================= 计算属性 =================
 const groupedItems = computed(() => {
@@ -444,6 +475,7 @@ const clearAll = () => {
 
 const applyCoupon = (cp) => {
   appliedCoupon.value = appliedCoupon.value?.id === cp.id ? null : cp
+  console.log('[购物车] 选中优惠券:', appliedCoupon.value ? `${appliedCoupon.value.name}(id=${appliedCoupon.value.id}, 减${appliedCoupon.value.discount}元)` : '已取消')
   showCoupon.value = false
 }
 
@@ -503,18 +535,26 @@ const checkout = async () => {
       items: selectedItems.value.map(item => ({
         skuId: item.skuId,
         quantity: item.qty
-      }))
+      })),
+      userCouponId: appliedCoupon.value?.id || null
+    }
+
+    if (appliedCoupon.value) {
+      const uid = String(appliedCoupon.value.id)  // String() 防雪花ID精度丢失
+      console.log('[购物车] 使用优惠券:', appliedCoupon.value.name, '折扣:', appliedCoupon.value.discount, '元', 'id:', uid)
+    } else {
+      console.log('[购物车] 未使用优惠券 (availableCoupons 共 ' + availableCoupons.value.length + ' 张可用)')
     }
 
     console.log('创建订单参数:', orderDTO)
 
     // 调用后端创建订单接口
     const res = await createOrder(orderDTO)
+    console.log('创建订单返回原始数据:', JSON.stringify(res))
     
-    // 后端返回 Result<CreateOrderVO>，拦截器解包后 res.data = { orderId, expireTime }
-    const result = res.data || res
-    const orderId = typeof result === 'string' ? result : result.orderId
-    const expireTime = typeof result === 'object' ? result.expireTime : ''
+    // 拦截器已解包 Result<T>，res 即 { orderId, expireTime }
+    const orderId = res?.orderId
+    const expireTime = res?.expireTime || ''
     
     if (!orderId) {
       ElMessage.error('订单创建失败,请重试')
@@ -577,7 +617,15 @@ const addToCart = async (item) => {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 28px;
 }
-.ch-left { display: flex; align-items: baseline; gap: 12px; }
+.ch-left { display: flex; align-items: center; gap: 12px; }
+.ch-back {
+  width: 34px; height: 34px; border-radius: 8px;
+  border: 1px solid #E0D8C8; background: #FFF;
+  color: #5C5546; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s; flex-shrink: 0;
+}
+.ch-back:hover { border-color: #A07830; color: #A07830; background: #FFFBF2; }
 .ch-title { font-size: 24px; font-weight: 500; color: #1A1A18; letter-spacing: -0.3px; }
 .ch-count { font-size: 13px; color: #8A8070; }
 .ch-clear {

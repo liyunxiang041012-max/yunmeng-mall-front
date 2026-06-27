@@ -286,9 +286,8 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { createPay, payCallback } from '@/api/pay'
 import { getMyAddresses, addAddress } from '@/api/user'
-import { getOrderDetail, getOrderItems } from '@/api/order'
+import { getOrderDetail, getOrderItems, updateOrderStatus } from '@/api/order'
 import nofoundImage from '@/assets/images/nofound.png'
 
 const router = useRouter()
@@ -368,7 +367,7 @@ const pollOrderStatus = async (orderId) => {
   statusPollTimer = setInterval(async () => {
     try {
       const res = await getOrderDetail(orderId)
-      const data = res?.data ?? res
+      const data = res
       const status = data?.status
       // status=4 表示 CANCELLED（已取消）
       if (status === 4 || status === 'CANCELLED') {
@@ -405,24 +404,31 @@ const loadPayData = async () => {
       getOrderItems(orderId)
     ])
     
-    // 后端返回 Result 格式,拦截器已解包一层
-    const orderData = orderRes.data || {}
-    const itemsData = itemsRes.data || []
+    // 拦截器已解包 Result<T>，orderRes/itemsRes 即 data 内容
+    const orderData = orderRes || {}
+    console.log('[支付页] 订单详情原始数据:', JSON.stringify(orderData, null, 2))
+    const itemsData = Array.isArray(itemsRes) ? itemsRes : []
     
     // 优先用后端返回的金额,没有就从明细计算
     let calculatedTotalAmount = 0
-    if (Array.isArray(itemsData) && itemsData.length > 0) {
+    if (itemsData.length > 0) {
       calculatedTotalAmount = itemsData.reduce((sum, item) => {
         return sum + (item.price || 0) * (item.quantity || 0)
       }, 0)
     }
     
     const totalAmountFen = orderData.totalAmount ?? calculatedTotalAmount
-    // payAmount 可能为 0（后端未设置），此时应回退到 totalAmount
-    const payAmountFen = (orderData.payAmount != null && orderData.payAmount !== 0) ? orderData.payAmount : totalAmountFen
     const discountAmountFen = orderData.discountAmount ?? 0
+    // payAmount 优先用后端返回值，但后端可能没减折扣（已知bug）
+    // 安全做法：如果后端 payAmount 没减折扣，则用 totalAmount - discountAmount
+    let payAmountFen = (orderData.payAmount != null && orderData.payAmount !== 0) ? orderData.payAmount : totalAmountFen
+    // 兜底：如果 discountAmount > 0 但 payAmount 没减，自己算
+    if (discountAmountFen > 0 && payAmountFen >= totalAmountFen) {
+      payAmountFen = totalAmountFen - discountAmountFen
+    }
+    console.log('[支付页] 金额解析: totalAmount=' + totalAmountFen + '分, payAmount=' + payAmountFen + '分, discountAmount=' + discountAmountFen + '分')
     
-    if (!orderRes.data && calculatedTotalAmount === 0) {
+    if (!orderData.id && calculatedTotalAmount === 0) {
       ElMessage.error('订单数据不完整,请联系客服')
       router.push('/cart')
       return
@@ -472,8 +478,8 @@ const loadPayData = async () => {
 const loadAddresses = async () => {
   try {
     const res = await getMyAddresses()
-    // 兼容不同的返回格式，并按照后端返回的字段映射
-    const rawData = res.data || res
+    // 拦截器已解包 Result<T>，res 即 data 内容
+    const rawData = res
     const addresses = Array.isArray(rawData) ? rawData : []
     
     // 映射后端字段到前端显示
@@ -611,105 +617,22 @@ const handlePay = async () => {
   try {
     paying.value = true
 
-    // 映射支付方式到后端要求的格式
-    const payChannelMap = {
-      'wechat': 'WECHAT',
-      'alipay': 'ALIPAY',
-      'bank': 'BANK_CARD'
-    }
+    const orderId = payData.value.orderId
+    console.log('[Pay] 更新订单状态为已支付, orderId:', orderId)
 
-    // 构造支付请求参数
-    // 注意:后端 PayDTO 需要金额单位是分
-    const payDTO = {
-      orderId: payData.value.orderId,              // 订单ID
-      payChannel: payChannelMap[selectedMethod.value] || 'WECHAT',  // 支付渠道
-      amount: Math.round(payData.value.totalAmount * 100),  // 金额,单位:分
-      addressId: selectedAddressId.value,          // 收货地址ID
-      note: orderNote.value || '',                 // 订单备注
-      couponId: null                               // 优惠券ID(如果有)
-    }
+    await updateOrderStatus({ orderId, status: 1 })
 
-    console.log('支付请求参数:', payDTO)
+    console.log('[Pay] 支付成功')
 
-    // 调用后端支付接口
-    const res = await createPay(payDTO)
-    
-    console.log('支付接口返回:', res)
-    
-    // 拦截器已处理 code !== 200，走到这里即成功，res = business data
-    const payNo = res?.payNo || res?.id || res
-    
-    if (!payNo) {
-      ElMessage.error('支付单号缺失，无法完成回调')
-      return
-    }
-    
-    console.log('开始调用支付回调，payNo:', payNo)
-    
-    // 调用支付成功回调接口，通知后端更新订单状态
-    try {
-      const cbRes = await payCallback(payNo)
-      console.log('支付回调返回:', cbRes)
-      
-      // 拦截器已处理 code !== 200，走到这里即成功
-    } catch (cbErr) {
-      console.error('支付回调接口失败:', cbErr)
-      ElMessage.warning('支付回调失败，订单状态可能未更新，请联系客服')
-      // 回调失败也继续跳转，不阻断用户流程
-    }
-    
-    ElMessage.success('支付成功')
-    
-    // 跳转到首页
+    ElMessage({ message: '支付成功', type: 'success', duration: 5000 })
+
     setTimeout(() => {
       router.push('/home')
-    }, 1500)
+    }, 2000)
 
   } catch (err) {
-    console.error('支付失败详情:', err)
-    
-    // 详细的错误提示
-    let errorMsg = '支付失败,请重试'
-    
-    if (err.response) {
-      const status = err.response.status
-      const data = err.response.data
-      
-      switch (status) {
-        case 400:
-          // 请求参数错误
-          errorMsg = data.message || data.msg || '请求参数错误,请检查订单信息'
-          if (data.errors) {
-            // 如果有具体的字段错误,显示出来
-            errorMsg = Object.values(data.errors).join(';')
-          }
-          break
-        case 401:
-          errorMsg = '登录已过期,请重新登录后再支付'
-          break
-        case 403:
-          errorMsg = '没有权限进行支付操作'
-          break
-        case 404:
-          errorMsg = '订单不存在,请检查订单信息'
-          break
-        case 500:
-          errorMsg = data.message || data.msg || '服务器错误,请稍后重试'
-          break
-        default:
-          errorMsg = data.message || data.msg || `支付失败(错误码:${status})`
-      }
-    } else if (err.message) {
-      if (err.message.includes('timeout')) {
-        errorMsg = '支付请求超时,请检查网络连接后重试'
-      } else if (err.message.includes('Network Error')) {
-        errorMsg = '网络连接失败,请检查网络后重试'
-      } else {
-        errorMsg = err.message
-      }
-    }
-    
-    ElMessage.error(errorMsg)
+    console.error('[Pay] 支付失败:', err)
+    ElMessage.error('支付失败，请稍后重试')
   } finally {
     paying.value = false
   }

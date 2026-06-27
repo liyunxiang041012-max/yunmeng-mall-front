@@ -9,8 +9,8 @@ export const getPayList = () => request.get('/py/pay/list')
 // 查询支付详情
 export const getPayDetail = (id) => request.get(`/py/pay/detail/${id}`)
 
-// 支付成功回调
-export const payCallback = (payNo) => request.post(`/py/pay/callback/${payNo}`)
+// 支付成功回调（静默模式——错误由调用方自行处理）
+export const payCallback = (payNo) => request.post(`/py/pay/callback/${payNo}`, null, { _silent: true })
 
 // 取消支付
 export const cancelPay = (id) => request.put(`/py/pay/cancel/${id}`)

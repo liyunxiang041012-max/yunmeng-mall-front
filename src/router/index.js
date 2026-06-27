@@ -117,6 +117,12 @@ const routes = [
     meta: { requireAuth: true }   // ← 需要登录
   },
   {
+    path: '/seckill',
+    name: 'Seckill',
+    component: () => import('@/views/Seckill.vue'),
+    meta: { requireAuth: true }   // ← 需要登录
+  },
+  {
     path: '/shop/setup',
     name: 'ShopSetup',
     component: () => import('@/views/ShopSetup.vue'),

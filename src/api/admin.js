@@ -46,3 +46,19 @@ export const getShopDetail = (id) => request.get(`/it/shop/admin/${id}`)
 export const updateShop = (id, data) => request.put(`/it/shop/admin/${id}`, data)
 /** 开关营业状态 */
 export const toggleShopStatus = (id) => request.put(`/it/shop/admin/toggle-status/${id}`)
+
+// ═══ 优惠券管理（平台端） ═══
+/** 管理员优惠券分页 */
+export const getAdminCouponPage = (params) => request.get('/pm/coupons/page', { params })
+/** 管理员查询优惠券详情 */
+export const getAdminCouponDetail = (id) => request.get(`/pm/coupons/${id}`)
+/** 管理员创建优惠券 */
+export const adminCreateCoupon = (data) => request.post('/pm/coupons', data)
+/** 管理员更新优惠券 */
+export const adminUpdateCoupon = (id, data) => request.put(`/pm/coupons/${id}`, data)
+/** 管理员删除优惠券 */
+export const adminDeleteCoupon = (id) => request.delete(`/pm/coupons/${id}`)
+/** 开始发放 */
+export const issueCoupon = (id) => request.put(`/pm/coupons/${id}/issue`)
+/** 暂停发放 */
+export const pauseCoupon = (id) => request.put(`/pm/coupons/${id}/pause`)
